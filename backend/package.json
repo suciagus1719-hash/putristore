@@ -1,0 +1,1 @@
+{"name":"smmpanel-backend","dependencies":{"better-sqlite3":"^9.4.0","body-parser":"^1.20.2","cors":"^2.8.5","dotenv":"^16.4.0","express":"^4.19.2","jsonwebtoken":"^9.0.2","morgan":"^1.10.0","node-fetch":"^2.7.0"},"scripts":{"start":"node index.js","dev":"NODE_ENV=development node index.js"}}

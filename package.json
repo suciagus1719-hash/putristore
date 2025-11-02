@@ -1,0 +1,5 @@
+{
+"name": "smmpanel-clone",
+"private": true,
+"workspaces": ["frontend", "backend"]
+}

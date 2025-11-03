@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
+
+import { API_BASE } from "./config";
 import { motion } from "framer-motion";
 import { Instagram, Youtube, Facebook, Linkedin, Twitter, Search, ArrowRight, Loader2, ShieldCheck, Sparkles, Star, ChevronLeft } from "lucide-react";
 
@@ -30,7 +31,7 @@ const PLATFORM_ICONS = {
 
 function cx(...c){return c.filter(Boolean).join(" ");}
 
-export default function LuxuryOrderFlow({ apiBase = "http://localhost:3001", bannerImages = [
+export default function LuxuryOrderFlow({ apiBase = API_BASE, bannerImages = [
   "https://images.unsplash.com/photo-1522071901873-411886a10004?q=80&w=1600&auto=format&fit=crop",
   "https://images.unsplash.com/photo-1542744173-8e7e53415bb0?q=80&w=1600&auto=format&fit=crop",
   "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?q=80&w=1600&auto=format&fit=crop"
@@ -130,11 +131,11 @@ export default function LuxuryOrderFlow({ apiBase = "http://localhost:3001", ban
           <button onClick={()=>setStep(step-1)} className="p-2 rounded-xl border border-white/10 hover:bg-white/5"><ChevronLeft className="h-5 w-5"/></button>
         )}
         <Sparkles className="h-5 w-5 text-fuchsia-400"/>
-        <span className="font-semibold">Aurum Panel</span>
+        <span className="font-semibold">Putri Gmoyy Store</span>
         <div className="ml-auto flex items-center gap-3">
           {/* compact search */}
           <button onClick={()=>setShowSearch(s=>!s)} className="p-2 rounded-xl border border-white/10 hover:bg-white/5"><Search className="h-5 w-5"/></button>
-          <div className="text-xs text-zinc-300 flex items-center gap-1"><ShieldCheck className="h-4 w-4"/> SSL Secure</div>
+          <div className="text-xs text-zinc-300 flex items-center gap-1"><ShieldCheck className="h-4 w-4"/> silahkan order</div>
         </div>
       </div>
       {/* announcement banner carousel */}
@@ -176,10 +177,10 @@ export default function LuxuryOrderFlow({ apiBase = "http://localhost:3001", ban
           <motion.section initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} className="mb-10">
             <div className="text-center mb-6">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gradient-to-r from-fuchsia-600/30 to-purple-600/30 border border-white/10 text-xs">
-                <Star className="h-4 w-4 text-amber-400"/> Premium SMM Services
+                <Star className="h-4 w-4 text-amber-400"/> Putri Gmoyy Sosmed
               </div>
-              <h1 className="text-4xl font-extrabold mt-4 bg-clip-text text-transparent bg-gradient-to-r from-fuchsia-300 via-purple-300 to-indigo-300">Tingkatkan Sosial Media dengan Sentuhan Mewah</h1>
-              <p className="text-zinc-300 mt-2">Pilih platform favoritmu untuk mulai—kami rekomendasikan paket populer & tercepat.</p>
+              <h1 className="text-4xl font-extrabold mt-4 bg-clip-text text-transparent bg-gradient-to-r from-fuchsia-300 via-purple-300 to-indigo-300">Silahkan Pilih Dan Order Langsung Kebutuhan Sosmedmu Di Bawah Ini Ya..</h1>
+              <p className="text-zinc-300 mt-2">Semua serba otomatis, proses cepat dan aman anjayyy</p>
             </div>
 
             {/* Platforms grid */}

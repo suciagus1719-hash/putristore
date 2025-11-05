@@ -16,10 +16,11 @@ export default async function handler(req, res) {
 
     // Kirim ke panel (SMM API v2)
     const body = new URLSearchParams({
-      key: PANEL_KEY,
-      action: "status",
-      order: order_id,
-    });
+  key: PANEL_KEY,
+  action: "status",
+  id: order_id, // pakai "id" bukan "order"
+});
+
 
     const r = await fetch(PANEL_API_URL, {
       method: "POST",

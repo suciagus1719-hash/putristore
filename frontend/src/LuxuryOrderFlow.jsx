@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { API_BASE } from "./config";
 import { motion } from "framer-motion";
 import {
@@ -23,6 +23,152 @@ const PLATFORM_ICONS = {
   Instagram, YouTube: Youtube, Facebook, LinkedIn: Linkedin,
   Twitter, "Twitter/X": Twitter, TikTok: TikTokIcon, Telegram: TelegramIcon, Other: Sparkles,
 };
+// helper: kembalikan komponen ikon berdasar nama platform apa pun variannya
+const getPlatformIcon = (name = "") => {
+  const n = name.toLowerCase();
+  if (n.includes("tiktok")) return TikTokIcon;
+  if (n.includes("youtube")) return Youtube;
+  if (n.includes("instagram")) return Instagram;
+  if (n.includes("facebook")) return Facebook;
+  if (n.includes("telegram")) return TelegramIcon;
+  if (n.includes("twitter") || n.includes("x")) return Twitter;
+  if (n.includes("shopee") || n.includes("tokopedia") || n.includes("bukalapak")) return Sparkles;
+  return Sparkles; // default
+};
+
+function SearchableSelect({
+  value,
+  onChange,
+  options,
+  placeholder = "Pilih Salah Satu",
+  leftIcon: LeftIcon, // ikon bisa undefined
+}) {
+  const [open, setOpen] = React.useState(false);
+  const [query, setQuery] = React.useState("");
+
+  const filtered = React.useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return options;
+    return options.filter(o => o.name.toLowerCase().includes(q));
+  }, [options, query]);
+
+  const selectedLabel = value || "";
+
+  // 🔧 tambahkan guard: pastikan LeftIcon adalah fungsi valid
+  const RenderIcon = LeftIcon || null;
+
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full p-3 rounded-xl border border-white/10 bg-white/10 text-left flex items-center gap-2"
+      >
+        {RenderIcon && <RenderIcon className="h-5 w-5 text-zinc-300" />}
+        <span className={selectedLabel ? "" : "text-zinc-400"}>
+          {selectedLabel || placeholder}
+        </span>
+        <span className="ml-auto text-zinc-400">▾</span>
+      </button>
+
+      {open && (
+        <div className="absolute z-30 mt-2 w-full rounded-xl border border-white/10 bg-zinc-950/95 backdrop-blur p-2 shadow-lg">
+          <input
+            autoFocus
+            className="w-full p-2 mb-2 rounded-lg border border-white/10 bg-white/10"
+            placeholder="Cari kategori…"
+            value={query}
+            onChange={(e)=>setQuery(e.target.value)}
+          />
+          <div className="max-h-64 overflow-auto pr-1">
+            {filtered.length === 0 && (
+              <div className="text-sm text-zinc-400 p-2">Tidak ada hasil</div>
+            )}
+            {filtered.map((opt) => (
+              <button
+                key={opt.name}
+                className="w-full text-left p-2 rounded-lg hover:bg-white/10 flex items-center gap-2"
+                onClick={() => { onChange(opt.name); setOpen(false); }}
+              >
+                {RenderIcon && <RenderIcon className="h-4 w-4 text-zinc-300" />}
+                <span>{opt.name}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+/* ====== KATEGORI PER PLATFORM (EDIT DI SINI SAJA) ====== */
+// Ubah/ambah item di tiap array sesuai kebutuhanmu
+const CATEGORY_LIBRARY = {
+  Instagram: [
+    { name: "Followers" },
+    { name: "Likes" },
+    { name: "Views" },
+    { name: "Comments" },
+    { name: "Story Views" },
+  ],
+  TikTok: [
+    { name: "Followers" },
+    { name: "Views" },
+    { name: "Likes" },
+    { name: "Comments" },
+    { name: "Shares" },
+  ],
+  "Twitter/X": [
+    { name: "Followers" },
+    { name: "Likes" },
+    { name: "Views" },
+    { name: "Retweets" },
+  ],
+  YouTube: [
+    { name: "Subscribers" },
+    { name: "Views" },
+    { name: "Likes" },
+    { name: "Comments" },
+  ],
+  Facebook: [
+    { name: "Followers" },
+    { name: "Likes" },
+    { name: "Comments" },
+    { name: "Shares" },
+  ],
+  Telegram: [
+    { name: "Members" },
+    { name: "Views" },
+    { name: "Reactions" },
+  ],
+  Shopee: [
+    { name: "Shopee / Bukalapak / Tokopedia" },
+    { name: "Product Views" },
+    { name: "Shop Followers" },
+  ],
+  Other: [
+    { name: "Custom" },
+  ],
+};
+/* ==== Deskripsi custom (opsional) ==== */
+// Kunci pakai provider_service_id dari API, atau pakai nama unikmu sendiri.
+// Contoh:
+const SERVICE_DESC_OVERRIDE = {
+  // "123456": "Followers real, refill 30 hari. Start 0–10 menit.",
+  // "78910": "Views cepat, cocok untuk video terbaru.",
+};
+
+/* ====== END KATEGORI PER PLATFORM ====== */
+const calcPrice = (svc, qty) => {
+  if (!svc || !qty) return null;
+  // Banyak panel mengirim rate per 1000
+  const rate = Number(svc.rate_per_1k ?? svc.price_per_1000 ?? 0);
+  if (!rate) return null;
+  return Math.ceil((rate / 1000) * Number(qty));
+};
+
 
 function cx(...c){ return c.filter(Boolean).join(" "); }
 
@@ -50,6 +196,19 @@ export default function LuxuryOrderFlow({
   const [error, setError] = useState("");
   const [bannerIdx, setBannerIdx] = useState(0);
   const [showSearch, setShowSearch] = useState(false);
+
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const touchStartXRef = useRef(null);
+  const touchCurrentXRef = useRef(null);
+
+// section refs (agar menu bisa scroll ke bagian tertentu)
+const orderRef = useRef(null);
+const statusRef = useRef(null);
+const monitoringRef = useRef(null);
+const priceRef = useRef(null);
+
+// (opsional) toggle admin menu
+const IS_ADMIN = true; // ganti ke false jika ingin menyembunyikan menu admin
 
   /* ---- effects ---- */
   useEffect(()=>{ const id = setInterval(()=>setBannerIdx(i=>(i+1)%bannerImages.length), 4000); return ()=>clearInterval(id); }, [bannerImages.length]);
@@ -88,23 +247,13 @@ export default function LuxuryOrderFlow({
     if(s){ setQuantity(q=>Math.min(Math.max(q, s.min||1), s.max||q)); }
   },[serviceId, services]);
 
-  // 5) preview harga
-  useEffect(()=>{
-    if(!selectedService || !quantity){ setPreview(null); return; }
-    const controller = new AbortController();
-    (async()=>{
-      try{
-        const r = await fetch(`${apiBase}/api/order/preview`, {
-          method:"POST",
-          headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({ provider_service_id:selectedService.provider_service_id, quantity }),
-          signal:controller.signal
-        });
-        const j = await r.json(); setPreview(j?.price??null);
-      }catch{}
-    })();
-    return ()=>controller.abort();
-  },[selectedService, quantity, apiBase]);
+ 
+// 5) preview harga (instan — tanpa delay)
+useEffect(() => {
+  setPreview(calcPrice(selectedService, quantity));
+}, [selectedService, quantity]);
+
+
 
   const canCheckout = useMemo(()=>(
     selectedService && link.trim() &&
@@ -139,6 +288,15 @@ export default function LuxuryOrderFlow({
       <div className="absolute bottom-0 left-1/3 h-64 w-64 rounded-full bg-indigo-500/25 blur-3xl"/>
     </div>
   );
+  const scrollToRef = (ref) => {
+  setDrawerOpen(false);
+  if (ref?.current) {
+    ref.current.scrollIntoView({ behavior: "smooth", block: "start" });
+  } else {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+};
+
 
   const Header = () => (
     <div className="sticky top-0 z-30 backdrop-blur bg-zinc-950/60 border-b border-white/10">
@@ -148,8 +306,29 @@ export default function LuxuryOrderFlow({
             <ChevronLeft className="h-5 w-5"/>
           </button>
         )}
-        <Sparkles className="h-5 w-5 text-fuchsia-400"/>
-        <span className="font-semibold">Putri Gmoyy Store</span>
+    <button
+  onClick={() => setDrawerOpen(true)}
+  className="shrink-0 h-8 w-8 rounded-xl border border-fuchsia-400 overflow-hidden flex items-center justify-center bg-fuchsia-500/20"
+  aria-label="Buka menu"
+>
+  <img
+    src={`${import.meta.env.BASE_URL}logo.png`}
+    alt="Putri Gmoyy Logo"
+    className="h-full w-full object-cover"
+    onError={(e) => {
+      // sembunyikan img, tampilkan fallback di dalam button
+      e.currentTarget.style.display = 'none';
+      const fallback = document.createElement('span');
+      fallback.textContent = 'P';
+      fallback.className = 'text-xs font-bold text-fuchsia-200';
+      e.currentTarget.parentElement?.appendChild(fallback);
+    }}
+  />
+</button>
+
+
+            <span className="font-semibold ml-2">Putri Gmoyy Store</span>
+
         <div className="ml-auto flex items-center gap-3">
           <button onClick={()=>setShowSearch(s=>!s)} className="p-2 rounded-xl border border-white/10 hover:bg-white/5">
             <Search className="h-5 w-5"/>
@@ -197,6 +376,57 @@ export default function LuxuryOrderFlow({
       <div className="min-h-[100svh] relative bg-gradient-to-b from-zinc-950 to-black text-zinc-50">
         <GradientBg/>
         <Header/>
+        {/* ===== Drawer Menu (left) ===== */}
+{/* Overlay */}
+{drawerOpen && (
+  <div
+    className="fixed inset-0 z-40 bg-black/50"
+    onClick={() => setDrawerOpen(false)}
+  />
+)}
+{/* Panel */}
+<div
+  className={cx(
+    "fixed top-0 left-0 z-50 h-full w-72 max-w-[85%] bg-zinc-900 border-r border-white/10 shadow-2xl transition-transform",
+    drawerOpen ? "translate-x-0" : "-translate-x-full"
+  )}
+  role="dialog"
+  aria-label="Menu"
+>
+  <div className="px-4 py-4 border-b border-white/10 flex items-center gap-3">
+    <div className="p-2 rounded-xl bg-fuchsia-500/20 border border-fuchsia-400/30">PPS</div>
+    <div className="font-semibold">Putri Gmoyy Store</div>
+    <button onClick={() => setDrawerOpen(false)} className="ml-auto text-zinc-400 hover:text-white">✕</button>
+  </div>
+
+  <div className="p-3 text-xs text-zinc-400">MENU UTAMA</div>
+  <nav className="px-2 space-y-1">
+    <button onClick={() => scrollToRef(orderRef)} className="w-full text-left px-3 py-2 rounded-lg hover:bg-white/5">
+      🏠 Beranda / Order
+    </button>
+    <button onClick={() => scrollToRef(statusRef)} className="w-full text-left px-3 py-2 rounded-lg hover:bg-white/5">
+      🧾 Status Order
+    </button>
+    <button onClick={() => scrollToRef(monitoringRef)} className="w-full text-left px-3 py-2 rounded-lg hover:bg-white/5">
+      ✅ Monitoring Sosmed
+    </button>
+    <button onClick={() => scrollToRef(priceRef)} className="w-full text-left px-3 py-2 rounded-lg hover:bg-white/5">
+      🏷️ Daftar Harga
+    </button>
+  </nav>
+
+  {IS_ADMIN && (
+    <>
+      <div className="p-3 mt-4 text-xs text-zinc-400">ADMIN</div>
+      <nav className="px-2 space-y-1">
+        <a href="#admin-panel" className="block px-3 py-2 rounded-lg hover:bg-white/5">⚙️ Panel Admin</a>
+        <a href="#admin-services" className="block px-3 py-2 rounded-lg hover:bg-white/5">🧩 Kelola Layanan</a>
+        <a href="#admin-orders" className="block px-3 py-2 rounded-lg hover:bg-white/5">📦 Kelola Order</a>
+      </nav>
+    </>
+  )}
+</div>
+
         <main className="max-w-2xl mx-auto px-4 py-10">
           <motion.section initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/5 to-purple-600/10 p-6 text-center">
             <Sparkles className="h-8 w-8 mx-auto text-fuchsia-400"/>
@@ -219,13 +449,34 @@ export default function LuxuryOrderFlow({
 
   // Beranda + Quick Order (semua di satu halaman)
   return (
-    <div className="min-h-[100svh] relative bg-gradient-to-b from-zinc-950 to-black text-zinc-50">
+    <div
+   className="min-h-[100svh] relative bg-gradient-to-b from-zinc-950 to-black text-zinc-50"
+   onTouchStart={(e) => {
+     touchStartXRef.current = e.touches[0].clientX;
+     touchCurrentXRef.current = e.touches[0].clientX;
+   }}
+   onTouchMove={(e) => {
+     const x = e.touches[0].clientX;
+     const start = touchStartXRef.current ?? x;
+     touchCurrentXRef.current = x;
+     const delta = x - start;
+     // buka saat swipe kanan dari tepi kiri
+     if (!drawerOpen && start < 24 && delta > 60) setDrawerOpen(true);
+      if (!drawerOpen && start > window.innerWidth - 24 && delta < -60) setDrawerOpen(true);
+     // tutup saat swipe kiri ketika drawer terbuka
+     if (drawerOpen && delta < -60) setDrawerOpen(false);
+   }}
+   onTouchEnd={() => {
+     touchStartXRef.current = null;
+     touchCurrentXRef.current = null;
+   }}
+ >
       <GradientBg/>
       <Header/>
 
       <main className="max-w-6xl mx-auto px-4 py-10">
         {/* HEADLINE */}
-        <motion.section initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} className="mb-8 text-center">
+        <motion.section ref={orderRef} initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} className="mb-8 text-center">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gradient-to-r from-fuchsia-600/30 to-purple-600/30 border border-white/10 text-xs">
             <Star className="h-4 w-4 text-amber-400"/> Putri Gmoyy Sosmed
           </div>
@@ -238,7 +489,7 @@ export default function LuxuryOrderFlow({
         {/* PILIH PLATFORM (klik kartu atau ketik) */}
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
           {platforms.map(name=>{
-            const Icon = PLATFORM_ICONS[name] || Sparkles;
+            const Icon = getPlatformIcon(name);
             return (
               <motion.button key={name} whileHover={{y:-2}} whileTap={{scale:0.98}}
                 onClick={()=>setPlatform(name)}
@@ -274,20 +525,23 @@ export default function LuxuryOrderFlow({
           </datalist>
         </div>
 
-        {/* KATEGORI */}
-        {!!platform && (
-          <div className="mt-6">
-            <div className="text-sm mb-1">Kategori *</div>
-            <select
-              className="w-full p-3 rounded-xl border border-white/10 bg-white/10"
-              value={action}
-              onChange={(e)=>setAction(e.target.value)}
-            >
-              <option value="">Pilih Salah Satu</option>
-              {actions.map(a => <option key={a} value={a}>{a}</option>)}
-            </select>
-          </div>
-        )}
+       {/* KATEGORI (dropdown dengan pencarian + ikon) */}
+{!!platform && (
+  <div className="mt-6">
+    <div className="text-sm mb-1">Kategori *</div>
+
+    <SearchableSelect
+      value={action}
+      onChange={setAction}
+      // ambil dari library; kalau kosong fallback ke data API lama
+      options={(CATEGORY_LIBRARY[platform] || (actions || []).map(a => ({ name: a })))}
+      placeholder="Pilih Salah Satu"
+     leftIcon={getPlatformIcon(platform)}
+
+    />
+  </div>
+)}
+
 
         {/* LAYANAN (nama saja) */}
         {!!action && (
@@ -355,27 +609,42 @@ export default function LuxuryOrderFlow({
               </div>
             </div>
 
-            {/* Deskripsi layanan dipindah ke bawah tombol */}
-            {selectedService?.description && (
-              <div className="text-sm text-zinc-300">{selectedService.description}</div>
-            )}
-            {error && <div className="text-sm text-red-400">{error}</div>}
-          </div>
-        )}
+      {/* Deskripsi layanan (judul + isi, bisa override) */}
+{(() => {
+  const desc =
+    SERVICE_DESC_OVERRIDE?.[selectedService?.provider_service_id] ??
+    selectedService?.description;
 
-        {/* Rekomendasi (opsional) */}
-        <div className="mt-10 grid md:grid-cols-3 gap-4">
-          {["Starter Pack","Growth Turbo","Ultra Fast"].map(tag=> (
-            <div key={tag} className="rounded-2xl p-5 border border-white/10 bg-gradient-to-br from-white/5 to-indigo-500/[.06]">
-              <div className="text-xs uppercase text-zinc-300">Rekomendasi</div>
-              <div className="text-lg font-semibold mt-1">{tag}</div>
-              <p className="text-sm text-zinc-300 mt-1">Kombinasi layanan paling laris untuk hasil cepat.</p>
-              <button className="mt-4 inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-gradient-to-r from-fuchsia-600 to-purple-600 text-white"
-                      onClick={()=>setPlatform(platforms[0])}>Pilih paket <ArrowRight className="h-4 w-4"/></button>
-            </div>
-          ))}
-        </div>
+  return desc ? (
+    <div className="space-y-2">
+      <div className="text-sm font-semibold text-zinc-200">Deskripsi Layanan</div>
+      <div className="text-sm text-zinc-300 whitespace-pre-line">{desc}</div>
+    </div>
+  ) : null;
+})()}
+</div>    
+)}       
+
+
+       
       </main>
+{/* ====== SECTION: STATUS ORDER ====== */}
+<section ref={statusRef} className="mt-12 rounded-2xl border border-white/10 p-6 bg-white/5">
+  <h2 className="text-xl font-semibold mb-2">Status Order</h2>
+  <p className="text-sm text-zinc-300">Masukkan nomor order untuk cek status. (Placeholder – bisa kamu sambungkan ke API panel)</p>
+</section>
+
+{/* ====== SECTION: MONITORING SOSMED ====== */}
+<section ref={monitoringRef} className="mt-6 rounded-2xl border border-white/10 p-6 bg-white/5">
+  <h2 className="text-xl font-semibold mb-2">Monitoring Sosmed</h2>
+  <p className="text-sm text-zinc-300">Pantau progres layanan (coming soon).</p>
+</section>
+
+{/* ====== SECTION: DAFTAR HARGA ====== */}
+<section ref={priceRef} className="mt-6 rounded-2xl border border-white/10 p-6 bg-white/5">
+  <h2 className="text-xl font-semibold mb-2">Daftar Harga</h2>
+  <p className="text-sm text-zinc-300">Tabel harga layanan terbaru (coming soon). Kamu bisa render dari data `services` yang sudah dimuat.</p>
+</section>
 
       <footer className="py-10 text-center text-xs text-zinc-500">
         © {new Date().getFullYear()} Aurum Panel — crafted with care

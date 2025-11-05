@@ -200,6 +200,12 @@ export default function LuxuryOrderFlow({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const touchStartXRef = useRef(null);
   const touchCurrentXRef = useRef(null);
+  // === Status Order ===
+const [statusOrderId, setStatusOrderId] = useState("");
+const [statusData, setStatusData] = useState(null);
+const [statusLoading, setStatusLoading] = useState(false);
+const [statusError, setStatusError] = useState("");
+
 
 // section refs (agar menu bisa scroll ke bagian tertentu)
 const orderRef = useRef(null);
@@ -279,6 +285,31 @@ useEffect(() => {
     }catch(e){ setError(String(e)); }
     finally{ setLoading(false); }
   };
+
+  // Ambil status order dari backend (yang meneruskan ke panel SMM)
+const fetchOrderStatus = async (id) => {
+  if (!id?.trim()) { setStatusError("Masukkan nomor order terlebih dahulu"); return; }
+  setStatusError(""); setStatusData(null); setStatusLoading(true);
+  try {
+    const r = await fetch(`${apiBase}/api/order/status?order_id=${encodeURIComponent(id.trim())}`, {
+      headers: { "Accept": "application/json" },
+    });
+    const j = await r.json();
+
+    // anggap sukses jika HTTP OK dan ada field hasil (status/order_id)
+    if (r.ok && (j.status || j.order_id || j.data)) {
+      setStatusData(j);
+      return;
+    }
+    throw new Error(j?.message || "Gagal mengambil status");
+  } catch (e) {
+    setStatusError(String(e.message || e));
+  } finally {
+    setStatusLoading(false);
+  }
+};
+
+
 
   /* ---- UI helpers ---- */
   const GradientBg = () => (
@@ -630,9 +661,57 @@ useEffect(() => {
       </main>
 {/* ====== SECTION: STATUS ORDER ====== */}
 <section ref={statusRef} className="mt-12 rounded-2xl border border-white/10 p-6 bg-white/5">
-  <h2 className="text-xl font-semibold mb-2">Status Order</h2>
-  <p className="text-sm text-zinc-300">Masukkan nomor order untuk cek status. (Placeholder – bisa kamu sambungkan ke API panel)</p>
+  <h2 className="text-xl font-semibold mb-4">Status Order</h2>
+
+  <div className="flex flex-col sm:flex-row gap-3">
+    <input
+      className="flex-1 p-3 rounded-xl border border-white/10 bg-white/10"
+      placeholder="Masukkan nomor order (invoice/order_id)"
+      value={statusOrderId}
+      onChange={(e)=>setStatusOrderId(e.target.value)}
+      onKeyDown={(e)=>{ if(e.key==='Enter') fetchOrderStatus(statusOrderId); }}
+    />
+    <button
+      onClick={()=>fetchOrderStatus(statusOrderId)}
+      className="px-4 py-3 rounded-xl text-white bg-gradient-to-r from-fuchsia-600 to-purple-600"
+      disabled={statusLoading}
+    >
+      {statusLoading ? "Mengecek…" : "Cek Status"}
+    </button>
+  </div>
+
+  {/* Error */}
+  {statusError && <div className="mt-3 text-sm text-red-400">{statusError}</div>}
+
+  {/* Hasil */}
+  {statusData && (
+    <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-4 space-y-2">
+      <div className="text-sm text-zinc-300">
+        <span className="font-semibold">Status:</span> {statusData.status || statusData.order_status || "-"}
+      </div>
+      <div className="grid sm:grid-cols-2 gap-2 text-sm text-zinc-300">
+        <div><span className="font-semibold">Order ID:</span> {statusData.order_id || statusData.id || "-"}</div>
+        <div><span className="font-semibold">Provider Order:</span> {statusData.provider_order_id || "-"}</div>
+        <div><span className="font-semibold">Start Count:</span> {statusData.start_count ?? "-"}</div>
+        <div><span className="font-semibold">Remains:</span> {statusData.remains ?? "-"}</div>
+        <div><span className="font-semibold">Charge:</span> {statusData.charge != null ? `Rp ${statusData.charge}` : "-"}</div>
+        <div><span className="font-semibold">Created:</span> {statusData.created_at || statusData.created || "-"}</div>
+      </div>
+
+      {/* Tombol refresh cepat */}
+      <div className="pt-2">
+        <button
+          onClick={()=>fetchOrderStatus(statusOrderId)}
+          className="text-xs px-3 py-2 rounded-lg border border-white/10 hover:bg-white/10"
+          disabled={statusLoading}
+        >
+          Refresh Status
+        </button>
+      </div>
+    </div>
+  )}
 </section>
+
 
 {/* ====== SECTION: MONITORING SOSMED ====== */}
 <section ref={monitoringRef} className="mt-6 rounded-2xl border border-white/10 p-6 bg-white/5">

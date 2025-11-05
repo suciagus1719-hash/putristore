@@ -1,5 +1,6 @@
 // frontend/src/config.js
-export const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001';
+export const API_BASE = "https://putristore-backend.vercel.app";
+
 
 export async function API(path, opts = {}) {
   const res = await fetch(API_BASE + path, opts);

@@ -5,6 +5,8 @@ import {
   Instagram, Youtube, Facebook, Linkedin, Twitter,
   Search, ArrowRight, Loader2, ShieldCheck, Sparkles, Star, ChevronLeft
 } from "lucide-react";
+// di atas file, bersama import lain
+import { saveOrderMeta, getOrderMeta } from "./utils/orderMeta";
 
 
 /* ---- Custom SVG icons (TikTok & Telegram) ---- */

@@ -178,6 +178,87 @@ app.get("/api/order/status", async (req, res) => {
     res.status(500).json({ message: String(e?.message || e) });
   }
 });
+// ============ PRODUKSI: status order ============
+app.get("/api/order/status", async (req, res) => {
+  try {
+    const order_id = String(req.query.order_id || "").trim();
+    if (!order_id) return res.status(400).json({ message: "order_id diperlukan" });
+    if (!API_KEY || !SECRET)
+      return res.status(500).json({ message: "ENV SMMPANEL_API_KEY / SMMPANEL_SECRET belum diset" });
+
+    // 1) coba form-urlencoded
+    const form = new URLSearchParams({
+      api_key: API_KEY,
+      secret_key: SECRET,
+      action: "status",
+      id: order_id,
+    });
+
+    let r = await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json" },
+      body: form,
+    });
+    let text = await r.text();
+    let j; try { j = JSON.parse(text); } catch { j = null; }
+
+    const looksIdMissing = String(text).toLowerCase().includes("id required");
+
+    // 2) fallback JSON bila perlu
+    if (!r.ok || !j || j.status !== true || looksIdMissing) {
+      const payload = {
+        api_key: API_KEY,
+        secret_key: SECRET,
+        action: "status",
+        id: Number(order_id),
+      };
+      r = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      text = await r.text();
+      try { j = JSON.parse(text); } catch { j = null; }
+    }
+
+    if (!j || j.status !== true) {
+      return res.status(502).json({
+        message: (j && j.data && j.data.msg) || (j && j.error) || "Gagal mengambil status dari panel",
+        raw: j || text,
+      });
+    }
+
+    // ==== NORMALISASI: ambil semua kemungkinan nama field dari panel ====
+    const d = j.data || {};
+    const norm = {
+      order_id,
+      status: d.status ?? "unknown",
+      start_count: toNum(d.start_count),
+      remains: toNum(d.remains ?? d.remain),
+      charge: toNum(d.charge ?? d.price ?? d.harga),
+
+      // tambahan:
+      target: d.target ?? d.link ?? d.username ?? d.profile ?? d.url ?? null,
+      service_name: d.service_name ?? d.service ?? d.layanan ?? null,
+      quantity: toNum(d.quantity ?? d.qty ?? d.jumlah),
+      provider_order: d.provider_order ?? d.provider_order_id ?? null,
+
+      // tanggal/waktu:
+      created_at: d.created ?? d.created_at ?? d.date ?? d.datetime ?? null,
+    };
+
+    return res.json(norm);
+  } catch (e) {
+    res.status(500).json({ message: String(e?.message || e) });
+  }
+});
+
+// helper sederhana
+function toNum(v) {
+  if (v === null || v === undefined) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
 
 // Jalankan server (Vercel tetap men-detect secara otomatis)
 const PORT = process.env.PORT || 3000;

@@ -5,7 +5,8 @@ import {
   Instagram, Youtube, Facebook, Linkedin, Twitter,
   Search, ArrowRight, Loader2, ShieldCheck, Sparkles, Star, ChevronLeft
 } from "lucide-react";
-import { getOrderMeta } from "./utils/orderMeta"; // atau path yang sesuai
+
+
 /* ---- Custom SVG icons (TikTok & Telegram) ---- */
 const TikTokIcon = (props) => (
   <svg viewBox="0 0 48 48" fill="currentColor" aria-hidden="true" {...props}>

@@ -1,58 +1,64 @@
 // api/order/status.js
 export default async function handler(req, res) {
   try {
-    const { order_id } = req.query;
-    if (!order_id) return res.status(400).json({ message: "order_id diperlukan" });
+    // Ambil order_id dari query (?order_id=...) atau body JSON { order_id: ... }
+    const order_id = String(
+      req.query.order_id ?? (req.body && req.body.order_id) ?? ""
+    ).trim();
 
-    const PANEL_API_URL = process.env.PANEL_API_URL; // contoh: https://panelmu.com/api/v2
-    const PANEL_KEY     = process.env.PANEL_KEY;     // API key dari panel
-
-    if (!PANEL_API_URL || !PANEL_KEY) {
-      return res.status(500).json({ message: "PANEL_API_URL / PANEL_KEY belum diset" });
+    if (!order_id) {
+      return res.status(400).json({ message: "order_id diperlukan" });
     }
 
-    // Kirim SEMUA variasi field yang umum dipakai panel SMM
-    const body = new URLSearchParams({
-      // api key variants
-      key: PANEL_KEY,
-      api_key: PANEL_KEY,
+    // ENV (set di Vercel → Project → Settings → Environment Variables)
+    const API_URL =
+      process.env.PANEL_API_URL || "https://pusatpanelsmm.com/api/json.php";
+    const API_KEY = process.env.SMMPANEL_API_KEY;
+    const SECRET  = process.env.SMMPANEL_SECRET;
 
-      // action variants
+    if (!API_KEY || !SECRET) {
+      return res
+        .status(500)
+        .json({ message: "ENV SMMPANEL_API_KEY / SMMPANEL_SECRET belum diset" });
+    }
+
+    // Panel ini mengharuskan body JSON (bukan form-urlencoded)
+    const payload = {
+      api_key: API_KEY,
+      secret_key: SECRET,
       action: "status",
-      // beberapa panel pakai 'order_status' sebagai action—tambahkan juga:
-      order_status: "1",
+      id: Number(order_id), // panel minta numeric
+    };
 
-      // id/order field variants
-      id: order_id,
-      order: order_id,
-      order_id: order_id,
-    });
-
-    const r = await fetch(PANEL_API_URL, {
+    const resp = await fetch(API_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body,
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify(payload),
     });
 
-    // panel kadang balas text/plain; coba parse JSON, kalau gagal bungkus sebagai text
-    const text = await r.text();
-    let j;
-    try { j = JSON.parse(text); } catch { j = { raw_text: text }; }
+    const json = await resp.json().catch(() => ({}));
 
-    if (!r.ok) {
-      return res.status(500).json({ message: j?.error || "Gagal ambil status dari panel", raw: j });
+    // Struktur sukses dari pusatpanelsmm biasanya { status: true, data: { ... } }
+    if (!resp.ok || json?.status !== true) {
+      return res.status(502).json({
+        message: json?.data?.msg || json?.error || "Gagal mengambil status",
+        raw: json,
+      });
     }
 
-    // Normalisasi agar frontend mudah konsumsi
+    const d = json.data || {};
+
+    // Normalisasi agar frontend gampang konsumsi
     return res.status(200).json({
-      order_id: j.order ?? j.order_id ?? j.id ?? String(order_id),
-      provider_order_id: j.provider_order ?? j.provider_order_id ?? null,
-      status: j.status ?? j.order_status ?? "unknown",
-      start_count: j.start_count ?? null,
-      remains: j.remains ?? j.remain ?? null,
-      charge: j.charge ?? null,
-      created_at: j.created ?? j.created_at ?? null,
-      raw: j,
+      order_id: order_id,
+      status: d.status ?? "unknown",
+      start_count: d.start_count ?? null,
+      remains: d.remains ?? null,
+      charge: d.charge ?? null,
+      raw: json, // tetap kirim buat debugging (aman di server)
     });
   } catch (e) {
     return res.status(500).json({ message: String(e?.message || e) });

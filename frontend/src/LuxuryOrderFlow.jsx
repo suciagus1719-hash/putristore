@@ -5,7 +5,7 @@ import {
   Instagram, Youtube, Facebook, Linkedin, Twitter,
   Search, ArrowRight, Loader2, ShieldCheck, Sparkles, Star, ChevronLeft
 } from "lucide-react";
-
+import { getOrderMeta } from "./utils/orderMeta"; // atau path yang sesuai
 /* ---- Custom SVG icons (TikTok & Telegram) ---- */
 const TikTokIcon = (props) => (
   <svg viewBox="0 0 48 48" fill="currentColor" aria-hidden="true" {...props}>
@@ -17,6 +17,22 @@ const TelegramIcon = (props) => (
     <path d="M9.04 12.6 4.2 11.1c-.53-.16-.56-.89-.06-1.11L18.99 4.8c.43-.18.87.22.75.68l-2.9 10.9c-.13.52-.73.75-1.15.44l-2.46-1.82-3.2 1.76c-.31.17-.68-.11-.58-.45l1.53-4.4 8-7-8.9 5.66z"/>
   </svg>
 );
+function safeNum(v) {
+  return (v === null || v === undefined) ? "-" : String(v);
+}
+function formatMoney(v) {
+  try { return new Intl.NumberFormat("id-ID", { style:"currency", currency:"IDR", maximumFractionDigits:0 }).format(Number(v)); }
+  catch { return v; }
+}
+function formatDate(v) {
+  if (!v) return "-";
+  // panel kadang kirim "YYYY-MM-DD HH:mm:ss" (tanpa zona). Tampilkan apa adanya jika Date gagal.
+  const d = new Date(v);
+  if (isNaN(d.getTime())) return String(v);
+  return new Intl.DateTimeFormat("id-ID", {
+    dateStyle: "long", timeStyle: "medium"
+  }).format(d);
+}
 
 /* Map platform -> icon component */
 const PLATFORM_ICONS = {
@@ -287,20 +303,53 @@ useEffect(() => {
   };
 
   // Ambil status order dari backend (yang meneruskan ke panel SMM)
+
+
 const fetchOrderStatus = async (id) => {
   if (!id?.trim()) { setStatusError("Masukkan nomor order terlebih dahulu"); return; }
   setStatusError(""); setStatusData(null); setStatusLoading(true);
+
   try {
     const r = await fetch(`${apiBase}/api/order/status?order_id=${encodeURIComponent(id.trim())}`, {
       headers: { "Accept": "application/json" },
     });
     const j = await r.json();
+// === simpan meta order ke backend ===
+if (j?.order_id) {
+  await fetch(`${apiBase}/api/order/create`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      service_id: selectedService?.provider_service_id,
+      link,
+      quantity,
+      service_name: selectedService?.name,
+      charge: preview || null,      // harga yang ditampilkan user
+    }),
+  });
+}
+if (j?.invoice) { 
+  setInvoice(j.invoice);
+} else { 
+  setError("Gagal membuat invoice"); 
+}
 
-    // anggap sukses jika HTTP OK dan ada field hasil (status/order_id)
-    if (r.ok && (j.status || j.order_id || j.data)) {
-      setStatusData(j);
+
+    if (r.ok && (j.status || j.order_id)) {
+      // 🔁 gabungkan metadata lokal (kalau ada)
+      const meta = getOrderMeta(id.trim());
+      const merged = {
+        ...j,
+        target: j.target ?? meta?.target ?? null,
+        service_name: j.service_name ?? meta?.service_name ?? null,
+        quantity: j.quantity ?? meta?.quantity ?? null,
+        charge: j.charge ?? meta?.charge ?? null,
+        created_at: j.created_at ?? meta?.created_at ?? null,
+      };
+      setStatusData(merged);
       return;
     }
+
     throw new Error(j?.message || "Gagal mengambil status");
   } catch (e) {
     setStatusError(String(e.message || e));
@@ -309,6 +358,35 @@ const fetchOrderStatus = async (id) => {
   }
 };
 
+
+{/* HASIL STATUS */}
+{statusData && (
+  <div className="rounded-2xl bg-zinc-900/60 p-4 md:p-6 border border-white/10 space-y-2 text-zinc-200">
+    <div className="grid md:grid-cols-2 gap-x-8 gap-y-2">
+      <p><span className="text-zinc-400">Status:</span> <b>{statusData.status ?? "-"}</b></p>
+      <p><span className="text-zinc-400">Provider Order:</span> {statusData.provider_order ?? "-"}</p>
+
+      <p><span className="text-zinc-400">Order ID:</span> {statusData.order_id ?? "-"}</p>
+      <p><span className="text-zinc-400">Remains:</span> {safeNum(statusData.remains)}</p>
+<p><span className="text-zinc-400">Target:</span> {statusData.target ?? "-"}</p>
+<p><span className="text-zinc-400">Layanan:</span> {statusData.service_name ?? "-"}</p>
+      <p><span className="text-zinc-400">Start Count:</span> {safeNum(statusData.start_count)}</p>
+      <p><span className="text-zinc-400">Charge:</span> {statusData.charge != null ? formatMoney(statusData.charge) : "-"}</p>
+
+      <p className="md:col-span-2"><span className="text-zinc-400">Target:</span> {statusData.target ?? "-"}</p>
+      <p className="md:col-span-2"><span className="text-zinc-400">Layanan:</span> {statusData.service_name ?? "-"}</p>
+      <p><span className="text-zinc-400">Jumlah:</span> {safeNum(statusData.quantity)}</p>
+      <p><span className="text-zinc-400">Tanggal & Waktu:</span> {formatDate(statusData.created_at)}</p>
+    </div>
+
+    <button
+      onClick={() => fetchOrderStatus(statusOrderId)}
+      className="mt-3 px-3 py-2 rounded-lg bg-white/10 hover:bg-white/15 transition"
+    >
+      Refresh Status
+    </button>
+  </div>
+)}
 
 
   /* ---- UI helpers ---- */

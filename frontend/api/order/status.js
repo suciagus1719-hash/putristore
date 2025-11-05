@@ -1,46 +1,29 @@
-// api/order/status.js (versi final untuk produksi)
-export default async function handler(req, res) {
+app.get("/api/order/status", async (req, res) => {
   try {
-    const order_id = String(req.query.order_id ?? req.body?.order_id ?? "").trim();
+    const order_id = String(req.query.order_id || "").trim();
     if (!order_id) return res.status(400).json({ message: "order_id diperlukan" });
-
-    const API_URL =
-      process.env.SMMPANEL_BASE_URL ||
-      process.env.PANEL_API_URL ||
-      "https://pusatpanelsmm.com/api/json.php";
-    const API_KEY = process.env.SMMPANEL_API_KEY;
-    const SECRET  = process.env.SMMPANEL_SECRET;
-
     if (!API_KEY || !SECRET)
       return res.status(500).json({ message: "ENV SMMPANEL_API_KEY / SMMPANEL_SECRET belum diset" });
 
-    // --- kirim form-urlencoded ---
+    // 1) request ke panel (form-urlencoded dulu)
     const form = new URLSearchParams({
       api_key: API_KEY,
       secret_key: SECRET,
       action: "status",
       id: order_id,
     });
-
     let r = await fetch(API_URL, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json" },
       body: form,
     });
-
     let text = await r.text();
     let j; try { j = JSON.parse(text); } catch { j = null; }
 
+    // fallback JSON bila perlu
     const looksIdMissing = String(text).toLowerCase().includes("id required");
-
-    // fallback ke JSON jika perlu
     if (!r.ok || !j || j.status !== true || looksIdMissing) {
-      const payload = {
-        api_key: API_KEY,
-        secret_key: SECRET,
-        action: "status",
-        id: Number(order_id),
-      };
+      const payload = { api_key: API_KEY, secret_key: SECRET, action: "status", id: Number(order_id) };
       r = await fetch(API_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Accept": "application/json" },
@@ -49,22 +32,35 @@ export default async function handler(req, res) {
       text = await r.text();
       try { j = JSON.parse(text); } catch { j = null; }
     }
-
     if (!j || j.status !== true) {
-      return res.status(502).json({
-        message: j?.data?.msg || j?.error || "Gagal mengambil status",
-      });
+      return res.status(502).json({ message: j?.data?.msg || j?.error || "Gagal mengambil status", raw: j || text });
     }
 
+    // 2) normalisasi dari panel
     const d = j.data || {};
-    return res.status(200).json({
+    const fromPanel = {
       order_id,
       status: d.status ?? "unknown",
-      start_count: d.start_count ?? null,
-      remains: d.remains ?? null,
-      charge: d.charge ?? null,
-    });
+      start_count: toNum(d.start_count),
+      remains: toNum(d.remains ?? d.remain),
+      charge: toNum(d.charge ?? d.price ?? d.harga),
+    };
+
+    // 3) AMBIL metadata lokal & MERGE → kalau panel tidak kirim, pakai nilai KV
+    const meta = await getOrderMeta(order_id);
+    const merged = {
+      ...fromPanel,
+      target: fromPanel.target ?? meta?.target ?? null,
+      service_name: meta?.service_name ?? null,
+      quantity: meta?.quantity ?? null,
+      provider_order: meta?.provider_order ?? null,  // kalau suatu saat kamu isi
+      created_at: meta?.created_at ?? null,
+    };
+
+    return res.json(merged);
   } catch (e) {
-    return res.status(500).json({ message: String(e?.message || e) });
+    res.status(500).json({ message: String(e?.message || e) });
   }
-}
+});
+
+function toNum(v) { if (v == null) return null; const n = Number(v); return Number.isFinite(n) ? n : null; }

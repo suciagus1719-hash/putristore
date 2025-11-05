@@ -7,6 +7,14 @@ const express = require("express");
 
 const app = express();
 app.use(express.json());
+// CORS untuk mengizinkan request dari domain mana pun (Github Pages, dll.)
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Accept");
+  if (req.method === "OPTIONS") return res.sendStatus(204);
+  next();
+});
 
 // ====== ENV dari Vercel ======
 const API_URL =

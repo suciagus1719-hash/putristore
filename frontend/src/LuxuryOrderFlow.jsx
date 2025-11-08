@@ -295,7 +295,8 @@ useEffect(() => {
     if(!canCheckout) return;
     setLoading(true); setError("");
     try{
-      const r = await fetch(`${apiBase}/api/order/checkout`, {
+      const r = await fetch(`${apiBase}/api/paymu_checkout`, {
+
         method:"POST",
         headers:{"Content-Type":"application/json"},
         body:JSON.stringify({

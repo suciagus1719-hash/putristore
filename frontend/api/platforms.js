@@ -1,6 +1,8 @@
 export default function handler(req, res) {
+  if (req.method !== 'GET') return res.status(405).end();
   res.status(200).json([
-    { name: 'Shopee', code: 'shopee' },
-    // dst...
+    { id: 1, name: 'Shopee' },
+    { id: 2, name: 'Tokopedia' },
+    { id: 3, name: 'Lazada' },
   ]);
 }

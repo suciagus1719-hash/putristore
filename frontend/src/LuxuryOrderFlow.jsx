@@ -291,25 +291,33 @@ useEffect(() => {
     quantity <= (selectedService?.max ?? 1)
   ), [selectedService, link, quantity]);
 
-  const handleCheckout = async()=>{
-    if(!canCheckout) return;
-    setLoading(true); setError("");
-    try{
-      const r = await fetch(`${apiBase}/api/paymu_checkout`, {
-
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({
-          provider_service_id:selectedService.provider_service_id,
-          link, quantity, nama:"Guest", komen:"", username:""
-        })
-      });
-      const j = await r.json();
-      if(j?.invoice){ setInvoice(j.invoice); }
-      else { setError("Gagal membuat invoice"); }
-    }catch(e){ setError(String(e)); }
-    finally{ setLoading(false); }
-  };
+ const handleCheckout = async () => {
+  if (!canCheckout) return;
+  setLoading(true); setError("");
+  try {
+    const amount = Math.max(1000, Number(preview) || Number(quantity) || 1000); // pakai total/preview bila ada
+    const r = await fetch(`${apiBase}/api/paymu_checkout`, {
+      method: "POST",
+      headers: { "Content-Type":"application/json" },
+      body: JSON.stringify({
+        name: username || "Guest",
+        email: "test@example.com",
+        phone: "08123456789",
+        amount
+      })
+    });
+    const j = await r.json();
+    if (j?.ok && j?.checkout_url) {
+      window.location.assign(j.checkout_url);      // ⬅️ langsung buka halaman pembayaran iPaymu
+      return;
+    }
+    setError(j?.result?.Message || j?.message || "Gagal membuat pembayaran.");
+  } catch (e) {
+    setError(String(e?.message || e));
+  } finally {
+    setLoading(false);
+  }
+};
 
   // Ambil status order dari backend (yang meneruskan ke panel SMM)
 

@@ -1,11 +1,10 @@
 // GET /api/actions?platform=Facebook
-// Kembalikan daftar kategori untuk platform terpilih (dedupe + normalisasi)
+// Ambil semua layanan dari panel -> kumpulkan kategori untuk platform tsb.
 
 const ORIGIN = "https://suciagus1719-hash.github.io";
 
-// deteksi platform dari nama layanan/kategori panel
-function guessPlatform(name = "") {
-  const n = String(name).toLowerCase();
+function guessPlatform(s = "") {
+  const n = String(s).toLowerCase();
   if (n.includes("tiktok")) return "TikTok";
   if (n.includes("instagram")) return "Instagram";
   if (n.includes("youtube")) return "YouTube";
@@ -16,21 +15,9 @@ function guessPlatform(name = "") {
   return "Other";
 }
 
-// sederhanakan label kategori: hapus kata platform & tipe konten umum
-const simplify = (s = "") =>
-  String(s)
-    .replace(/facebook|instagram|tiktok|youtube|twitter|telegram|shopee|tokopedia|bukalapak/gi, "")
-    .replace(/page|post|video|reels|story|channel|live|views?/gi, (m) =>
-      // biarkan "Views" sebagai kata kunci utama
-      /views?/i.test(m) ? "Views" : ""
-    )
-    .replace(/\s+/g, " ")
-    .trim();
-
-const FALLBACK = ["Followers", "Likes", "Views", "Comments", "Shares", "Subscribers", "Members", "Reactions", "Other"];
+const FALLBACK = ["Followers","Likes","Views","Comments","Shares","Subscribers","Members","Reactions","Other"];
 
 export default async function handler(req, res) {
-  // CORS
   res.setHeader("Access-Control-Allow-Origin", ORIGIN);
   res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
   if (req.method === "OPTIONS") return res.status(204).end();
@@ -43,56 +30,36 @@ export default async function handler(req, res) {
     const API = process.env.SMMPANEL_BASE_URL;
     const KEY = process.env.SMMPANEL_API_KEY;
     const SEC = process.env.SMMPANEL_SECRET;
+    if (!API || !KEY || !SEC) return res.status(200).json(FALLBACK);
 
-    if (!API || !KEY || !SEC) {
-      return res.status(200).json(FALLBACK);
-    }
-
-    const form = new URLSearchParams({ api_key: KEY, secret_key: SEC, action: "services" });
-    const r = await fetch(API, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json" },
-      body: form,
-    });
-
+    const body = new URLSearchParams({ api_key: KEY, secret_key: SEC, action: "services" });
+    const r = await fetch(API, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json" }, body });
     const text = await r.text();
-    let list;
-    try {
-      list = JSON.parse(text);
-      if (!Array.isArray(list)) list = [];
-    } catch {
-      list = [];
-    }
+
+    let payload; try { payload = JSON.parse(text); } catch { payload = {}; }
+    const list = Array.isArray(payload?.data) ? payload.data : []; // sesuai dok. "status/data" :contentReference[oaicite:1]{index=1}
 
     const set = new Set();
     for (const s of list) {
       const plat = guessPlatform(s?.name || s?.category || "");
       if (plat !== platform) continue;
-
-      const raw = String(s?.category || s?.type || "Other");
-      const label = simplify(raw) || raw.trim();
-
-      // Normalisasi akhir ke kosakata umum
-      const l = label.toLowerCase();
-      let finalLabel = label;
-
-      if (/(subscriber|sub)/i.test(label)) finalLabel = "Subscribers";
-      else if (/(member)/i.test(label)) finalLabel = "Members";
-      else if (/(reaction)/i.test(label)) finalLabel = "Reactions";
-      else if (/(comment)/i.test(label)) finalLabel = "Comments";
-      else if (/(share)/i.test(label)) finalLabel = "Shares";
-      else if (/(like)/i.test(label)) finalLabel = "Likes";
-      else if (/(view)/i.test(label)) finalLabel = "Views";
-      else if (/(follow)/i.test(label)) finalLabel = "Followers";
-      else if (!finalLabel) finalLabel = "Other";
-
-      set.add(finalLabel);
+      const raw = String(s?.category || "Other").trim();
+      // Normalisasi ringan → Likes/Followers/Views/Comments/Shares/...
+      let label = raw;
+      if (/subscriber|sub/i.test(raw)) label = "Subscribers";
+      else if (/member/i.test(raw)) label = "Members";
+      else if (/reaction/i.test(raw)) label = "Reactions";
+      else if (/comment/i.test(raw)) label = "Comments";
+      else if (/share/i.test(raw)) label = "Shares";
+      else if (/like/i.test(raw)) label = "Likes";
+      else if (/view|watch|play/i.test(raw)) label = "Views";
+      else if (/follow/i.test(raw)) label = "Followers";
+      set.add(label);
     }
 
     const out = Array.from(set);
-    // urutkan agar “Followers, Likes, Views …” tampil duluan
-    const order = ["Followers", "Likes", "Views", "Comments", "Shares", "Subscribers", "Members", "Reactions", "Other"];
-    out.sort((a, b) => (order.indexOf(a) + 999) - (order.indexOf(b) + 999));
+    const order = ["Followers","Likes","Views","Comments","Shares","Subscribers","Members","Reactions","Other"];
+    out.sort((a,b)=>(order.indexOf(a)+999)-(order.indexOf(b)+999));
 
     return res.status(200).json(out.length ? out : FALLBACK);
   } catch {

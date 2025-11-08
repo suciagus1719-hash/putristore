@@ -18,31 +18,25 @@ export default async function handler(req, res) {
   if (req.method === "OPTIONS") return res.status(204).end();
   if (req.method !== "GET") return res.status(405).end();
 
+  const FALLBACK = ["TikTok","Twitter/X","Instagram","YouTube","Facebook","Telegram","Shopee","Other"];
+
   try {
     const API = process.env.SMMPANEL_BASE_URL;
     const KEY = process.env.SMMPANEL_API_KEY;
     const SEC = process.env.SMMPANEL_SECRET;
 
-    const body = new URLSearchParams({
-      api_key: KEY, secret_key: SEC, action: "services"
-    });
+    if (!API || !KEY || !SEC) return res.status(200).json(FALLBACK);
 
-    const r = await fetch(API, {
-      method: "POST",
-      headers: { "Content-Type":"application/x-www-form-urlencoded", "Accept":"application/json" },
-      body
-    });
+    const form = new URLSearchParams({ api_key: KEY, secret_key: SEC, action: "services" });
+    const r = await fetch(API, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json" }, body: form });
     const text = await r.text();
     let list; try { list = JSON.parse(text); } catch { list = []; }
 
-    // list: array service dari panel. Kita petakan ke set platform
     const set = new Set();
-    for (const s of (list || [])) {
-      const plat = guessPlatform(String(s?.name || s?.category || ""));
-      set.add(plat);
-    }
-    res.status(200).json(Array.from(set));
-  } catch (e) {
-    res.status(500).json({ ok:false, message: String(e?.message||e) });
+    for (const s of list) set.add(guessPlatform(String(s?.name || s?.category || "")));
+    const out = Array.from(set);
+    return res.status(200).json(out.length ? out : FALLBACK);
+  } catch {
+    return res.status(200).json(FALLBACK);
   }
 }

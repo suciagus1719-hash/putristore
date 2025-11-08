@@ -231,6 +231,11 @@ const orderRef = useRef(null);
 const statusRef = useRef(null);
 const monitoringRef = useRef(null);
 const priceRef = useRef(null);
+// muat actions
+fetch(`${apiBase}/api/actions?platform=${encodeURIComponent(platform)}`)
+  .then(r => r.ok ? r.json() : [])
+  .then(d => { setActions(d?.length ? d : ["Followers","Likes","Views","Shares","Comments","Other"]); })
+  .catch(() => setActions(["Followers","Likes","Views","Shares","Comments","Other"]));
 
 // (opsional) toggle admin menu
 const IS_ADMIN = true; // ganti ke false jika ingin menyembunyikan menu admin

@@ -1,8 +1,12 @@
 export default function handler(req, res) {
-  if (req.method !== 'GET') return res.status(405).end();
+  // CORS utk GitHub Pages
+  res.setHeader("Access-Control-Allow-Origin", "https://suciagus1719-hash.github.io");
+  res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
+  if (req.method === "OPTIONS") return res.status(204).end();
+  if (req.method !== "GET") return res.status(405).end();
+
+  // Frontend kamu butuh array of strings
   res.status(200).json([
-    { id: 1, name: 'Shopee' },
-    { id: 2, name: 'Tokopedia' },
-    { id: 3, name: 'Lazada' },
+    "TikTok","Twitter/X","Instagram","YouTube","Facebook","Telegram","Shopee","Other"
   ]);
 }

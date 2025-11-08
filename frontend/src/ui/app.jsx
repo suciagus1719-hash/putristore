@@ -7,3 +7,14 @@ export default function App() {
     />
   );
 }
+// src/ui/App.jsx
+import PlatformSection from "../sections/PlatformSection.jsx";
+
+export default function App() {
+  return (
+    <div>
+      <h1>PutriStore</h1>
+      <PlatformSection />
+    </div>
+  );
+}

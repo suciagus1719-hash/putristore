@@ -232,10 +232,14 @@ const statusRef = useRef(null);
 const monitoringRef = useRef(null);
 const priceRef = useRef(null);
 // muat actions
-fetch(`${apiBase}/api/actions?platform=${encodeURIComponent(platform)}`)
-  .then(r => r.ok ? r.json() : [])
-  .then(d => { setActions(d?.length ? d : ["Followers","Likes","Views","Shares","Comments","Other"]); })
-  .catch(() => setActions(["Followers","Likes","Views","Shares","Comments","Other"]));
+useEffect(() => {
+  if (!platform) return;
+  fetch(`${apiBase}/api/actions?platform=${encodeURIComponent(platform)}`)
+    .then(r => r.ok ? r.json() : [])
+    .then(d => { setActions(d?.length ? d : ["Followers","Likes","Views","Shares","Comments","Other"]); })
+    .catch(() => setActions(["Followers","Likes","Views","Shares","Comments","Other"]));
+    
+}, [apiBase, platform]);
 
 // (opsional) toggle admin menu
 const IS_ADMIN = true; // ganti ke false jika ingin menyembunyikan menu admin
@@ -291,21 +295,23 @@ useEffect(() => {
     quantity <= (selectedService?.max ?? 1)
   ), [selectedService, link, quantity]);
 
- const handleCheckout = async () => {
+const handleCheckout = async () => {
   if (!canCheckout) return;
   setLoading(true); setError("");
   try {
-    const amount = Math.max(1000, Number(preview) || Number(quantity) || 1000); // pakai total/preview bila ada
+    const amount = Math.max(1000, Number(preview) || Number(quantity) || 1000);
     const r = await fetch(`${apiBase}/api/paymu_checkout`, {
       method: "POST",
       headers: { "Content-Type":"application/json" },
       body: JSON.stringify({
-        name: username || "Guest",
+        name: "Guest", // <-- ganti sesuai sumber nama akunmu
         email: "test@example.com",
         phone: "08123456789",
         amount
       })
     });
+    
+
     const j = await r.json();
     if (j?.ok && j?.checkout_url) {
       window.location.assign(j.checkout_url);      // ⬅️ langsung buka halaman pembayaran iPaymu

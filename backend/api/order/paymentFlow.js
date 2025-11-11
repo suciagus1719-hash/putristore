@@ -1,11 +1,30 @@
 // backend/api/order/paymentFlow.js
 const express = require("express");
 const multer = require("multer");
+const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "https://suciagus1719-hash.github.io";
 const path = require("path");
 const fs = require("fs");
 const fetch = global.fetch || require("node-fetch");
 
 const router = express.Router();
+
+
+
+router.use((req, res, next) => {
+
+  res.setHeader("Access-Control-Allow-Origin", FRONTEND_ORIGIN);
+
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+  if (req.method === "OPTIONS") return res.status(204).end();
+
+  next();
+
+});
+
+
 
 // penyimpanan bukti (sementara ke folder uploads/bukti)
 const uploadDir = path.join(process.cwd(), "uploads/bukti");
@@ -190,3 +209,6 @@ router.post("/admin/orders/:orderId/status", async (req, res) => {
 });
 
 module.exports = router;
+
+
+

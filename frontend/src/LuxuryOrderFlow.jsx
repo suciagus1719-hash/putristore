@@ -25,7 +25,7 @@ import {
 
 const WHATSAPP_GROUP_LINK = "https://chat.whatsapp.com/link-grup-kamu";
 const API_FALLBACK = "https://putristore-backend.vercel.app";
-const AVATAR_URL = "https://i.imgur.com/pQnQpQw.jpg"; // ganti dengan foto kamu
+const AVATAR_URL = "https://images.unsplash.com/photo-1504593811423-6dd665756598?auto=format&fit=crop&w=200&q=60";
 const QRIS_IMAGE_URL = "https://i.imgur.com/lQjQpMZ.png"; // ganti dengan QRIS asli
 
 const PLATFORM_CARDS = [
@@ -36,6 +36,9 @@ const PLATFORM_CARDS = [
   { key: "Telegram", label: "Telegram", accent: "from-cyan-400 to-blue-500", icon: Send },
   { key: "Shopee", label: "Shopee", accent: "from-orange-500 to-amber-500", icon: ShoppingBag },
 ];
+
+const getPlatformIcon = (platform) =>
+  PLATFORM_CARDS.find((p) => p.key === platform)?.icon || ShieldCheck;
 
 const CATEGORY_ICONS = {
   Followers: Users,
@@ -144,7 +147,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
         const data = await res.json();
         if (Array.isArray(data) && data.length) {
           setCategories(data);
-          setSelectedCategory(data[0]);
+          setSelectedCategory("");
         } else {
           setCategories([]);
           setSelectedCategory("");
@@ -163,11 +166,15 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
   }, [apiBase, selectedPlatform]);
 
   const filteredServices = useMemo(() => {
-    return allServices
-      .filter((srv) => guessPlatform(srv.name || srv.category) === selectedPlatform)
-      .filter((srv) =>
-        selectedCategory ? srv.category?.toLowerCase().includes(selectedCategory.toLowerCase()) : true
+    return allServices.filter((srv) => {
+      const plat = guessPlatform(srv.name || srv.category || "");
+      if (plat !== selectedPlatform) return false;
+      if (!selectedCategory) return false;
+      return (
+        srv.category &&
+        srv.category.trim().toLowerCase() === selectedCategory.trim().toLowerCase()
       );
+    });
   }, [allServices, selectedPlatform, selectedCategory]);
 
   const pricePreview = useMemo(() => {
@@ -487,7 +494,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
             </div>
 
             {categoryLoading ? (
-              <p className="text-sm text-white/60">Memuat kategori…</p>
+              <p className="text-sm text-white/60">Memuat kategoriï¿½</p>
             ) : (
               selectedPlatform && (
                 <div className="flex flex-wrap gap-2">
@@ -515,7 +522,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
 
             <div className="space-y-3">
               <p className="text-sm uppercase tracking-wide text-white/50">
-                Pilih layanan ({servicesLoading ? "memuat…" : `${filteredServices.length} opsi`})
+                Pilih layanan ({servicesLoading ? "memuatï¿½" : `${filteredServices.length} opsi`})
               </p>
               <div className="grid md:grid-cols-2 gap-3 max-h-[360px] overflow-y-auto pr-2">
                 {filteredServices.length === 0 && (
@@ -582,9 +589,16 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
                   />
                 </label>
 
-                <div className="text-sm text-white/70 border border-white/10 rounded-2xl p-4 bg-black/20">
-                  <p className="font-semibold text-white">Deskripsi Layanan</p>
-                  <p>{selectedService.description || "Deskripsi belum tersedia dari panel."}</p>
+                <div className="text-sm border border-white/10 rounded-2xl p-4 bg-black/20 space-y-3">
+                  <p className="font-semibold text-white">Informasi Layanan</p>
+                  <div className="grid sm:grid-cols-2 gap-2 text-white/80">
+                    <p>Harga per 1.000 qty: {formatIDR(selectedService.rate_per_1k)}</p>
+                    <p>Min Order: {selectedService.min}</p>
+                    <p>Max Order: {selectedService.max}</p>
+                  </div>
+                  <p className="whitespace-pre-line leading-relaxed text-white/70">
+                    {selectedService.description || "Deskripsi belum tersedia dari panel."}
+                  </p>
                 </div>
               </>
             )}
@@ -748,7 +762,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
                 className="w-full rounded-2xl border border-white/20"
               />
             ) : (
-              <div className="text-sm text-white/70">Sedang membuat gambar struk…</div>
+              <div className="text-sm text-white/70">Sedang membuat gambar strukï¿½</div>
             )}
             {receiptImage && (
               <a

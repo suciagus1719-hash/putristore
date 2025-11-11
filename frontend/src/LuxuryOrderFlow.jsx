@@ -7,13 +7,26 @@ import {
   Facebook,
   Send,
   ShoppingBag,
+  Users,
+  Heart,
+  Eye,
+  MessageCircle,
+  Share2,
   Menu,
   X,
   ShieldCheck,
+  CreditCard,
+  Wallet,
+  Smartphone,
+  Images,
+  Download,
+  Clock,
 } from "lucide-react";
 
 const WHATSAPP_GROUP_LINK = "https://chat.whatsapp.com/link-grup-kamu";
 const API_FALLBACK = "https://putristore-backend.vercel.app";
+const AVATAR_URL = "https://i.imgur.com/pQnQpQw.jpg"; // ganti dengan foto kamu
+const QRIS_IMAGE_URL = "https://i.imgur.com/lQjQpMZ.png"; // ganti dengan QRIS asli
 
 const PLATFORM_CARDS = [
   { key: "Instagram", label: "Instagram", accent: "from-pink-500 to-amber-400", icon: Instagram },
@@ -22,6 +35,25 @@ const PLATFORM_CARDS = [
   { key: "Facebook", label: "Facebook", accent: "from-sky-600 to-blue-700", icon: Facebook },
   { key: "Telegram", label: "Telegram", accent: "from-cyan-400 to-blue-500", icon: Send },
   { key: "Shopee", label: "Shopee", accent: "from-orange-500 to-amber-500", icon: ShoppingBag },
+];
+
+const CATEGORY_ICONS = {
+  Followers: Users,
+  Likes: Heart,
+  Views: Eye,
+  Comments: MessageCircle,
+  Shares: Share2,
+  Subscribers: Users,
+  Members: Users,
+  Reactions: Heart,
+  Other: ShieldCheck,
+};
+
+const PAYMENT_METHODS = [
+  { key: "qris", label: "QRIS", icon: CreditCard },
+  { key: "dana", label: "Dana", icon: Wallet },
+  { key: "ovo", label: "OVO", icon: Smartphone },
+  { key: "bri", label: "Transfer BRI", icon: CreditCard },
 ];
 
 const guessPlatform = (s = "") => {
@@ -40,6 +72,22 @@ const formatIDR = (value) =>
   new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(
     Number(value) || 0
   );
+
+const formatWitaTime = (date) =>
+  new Intl.DateTimeFormat("id-ID", {
+    timeZone: "Asia/Makassar",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(date || new Date());
+
+const formatWitaDate = (date) =>
+  new Intl.DateTimeFormat("id-ID", {
+    timeZone: "Asia/Makassar",
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  }).format(date || new Date());
 
 export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
   const navigate = useNavigate();
@@ -61,11 +109,13 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
   const [target, setTarget] = useState("");
   const [customer, setCustomer] = useState({ name: "", phone: "", email: "" });
   const [step, setStep] = useState(1);
-  const [payment, setPayment] = useState({ method: "qris", amount: "" });
+  const [payment, setPayment] = useState({ method: "qris", amount: 0 });
   const [proof, setProof] = useState(null);
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [orderTimestamp, setOrderTimestamp] = useState(null);
+  const [receiptImage, setReceiptImage] = useState(null);
 
   useEffect(() => {
     async function loadServices() {
@@ -117,15 +167,14 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
       .filter((srv) => guessPlatform(srv.name || srv.category) === selectedPlatform)
       .filter((srv) =>
         selectedCategory ? srv.category?.toLowerCase().includes(selectedCategory.toLowerCase()) : true
-      )
-      .slice(0, 50);
+      );
   }, [allServices, selectedPlatform, selectedCategory]);
 
   const pricePreview = useMemo(() => {
     if (!selectedService) return 0;
     const rate = Number(selectedService.rate_per_1k) || 0;
     const qty = Number(quantity) || 0;
-    return (rate / 1000) * qty;
+    return Math.max((rate / 1000) * qty, 0);
   }, [selectedService, quantity]);
 
   const request = async (path, opts = {}) => {
@@ -164,6 +213,8 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
         body: JSON.stringify(payload),
       });
       setOrder(data.order);
+      setOrderTimestamp(new Date());
+      setPayment((prev) => ({ ...prev, amount: pricePreview || prev.amount }));
       setStep(2);
     } catch (err) {
       setError(err.message);
@@ -174,38 +225,22 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
 
   const handlePaymentMethod = async () => {
     setError("");
-    if (!payment.amount) {
-      setError("Masukkan nominal pembayaran.");
-      return;
-    }
-    setLoading(true);
-    try {
-      const data = await request("/api/order/payment-method", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          order_id: order.order_id,
-          method: payment.method,
-          amount: Number(payment.amount),
-        }),
-      });
-      setOrder(data.order);
-      setStep(3);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleUploadProof = async () => {
-    setError("");
     if (!proof) {
       setError("Upload bukti pembayaran terlebih dahulu.");
       return;
     }
     setLoading(true);
     try {
+      await request("/api/order/payment-method", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          order_id: order.order_id,
+          method: payment.method,
+          amount: payment.amount || pricePreview,
+        }),
+      });
+
       const form = new FormData();
       form.append("order_id", order.order_id);
       form.append("proof", proof);
@@ -227,6 +262,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
     setServiceId(String(srv.provider_service_id));
     const min = Number(srv.min) || 1;
     if (!quantity || quantity < min) setQuantity(min);
+    setPayment((prev) => ({ ...prev, amount: (Number(srv.rate_per_1k) / 1000) * (quantity || min) }));
   };
 
   const handleStatusCheck = async () => {
@@ -247,6 +283,63 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
       alert(`Gagal cek status: ${err.message}`);
     }
   };
+
+  const generateReceiptImage = () => {
+    if (!order) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = 1200;
+    canvas.height = 630;
+    const ctx = canvas.getContext("2d");
+
+    const gradient = ctx.createLinearGradient(0, 0, 1200, 630);
+    gradient.addColorStop(0, "#1f0a3d");
+    gradient.addColorStop(1, "#4b1da1");
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.fillStyle = "rgba(255,255,255,0.15)";
+    ctx.fillRect(60, 60, 1080, 510);
+
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 48px 'Poppins', sans-serif";
+    ctx.fillText("Struk Order Premium", 120, 140);
+
+    ctx.font = "24px 'Poppins', sans-serif";
+    const details = [
+      [`Order ID`, order.order_id],
+      ["Layanan", `${selectedService?.name || order.service_id} (${order.service_id})`],
+      ["Target", order.target],
+      ["Quantity", order.quantity],
+      ["Nama", customer.name || "-"],
+      ["No. WhatsApp", customer.phone || "-"],
+      ["Email", customer.email || "-"],
+      ["Nominal", formatIDR(payment.amount || pricePreview)],
+      ["Tanggal", formatWitaDate(orderTimestamp)],
+      ["Jam (WITA)", formatWitaTime(orderTimestamp)],
+    ];
+
+    let y = 200;
+    details.forEach(([label, value]) => {
+      ctx.fillStyle = "#a78bfa";
+      ctx.fillText(`${label}:`, 120, y);
+      ctx.fillStyle = "#fff";
+      ctx.fillText(String(value), 360, y);
+      y += 40;
+    });
+
+    ctx.fillStyle = "#a78bfa";
+    ctx.font = "20px 'Poppins', sans-serif";
+    ctx.fillText("Terima kasih telah memesan layanan kami.", 120, 520);
+
+    setReceiptImage(canvas.toDataURL("image/png"));
+  };
+
+  useEffect(() => {
+    if (step === 4 && order) {
+      generateReceiptImage();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, order]);
 
   const menuItems = [
     {
@@ -270,10 +363,11 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
   const resetFlow = () => {
     setStep(1);
     setOrder(null);
-    setPayment({ method: "qris", amount: "" });
+    setPayment({ method: "qris", amount: 0 });
     setProof(null);
     setTarget("");
     setQuantity(100);
+    setOrderTimestamp(null);
   };
 
   const renderStepTitle = (n, title) => (
@@ -297,6 +391,12 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
+      {loading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur">
+          <div className="animate-spin rounded-full h-16 w-16 border-4 border-white border-t-transparent" />
+        </div>
+      )}
+
       <button
         className="fixed top-4 left-4 z-30 rounded-2xl bg-white/10 border border-white/20 p-2 backdrop-blur"
         onClick={() => setMenuOpen(true)}
@@ -304,13 +404,11 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
       >
         <Menu className="w-5 h-5" />
       </button>
+
       {menuOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-black/40"
-          onClick={() => setMenuOpen(false)}
-          aria-hidden="true"
-        />
+        <div className="fixed inset-0 z-40 bg-black/40" onClick={() => setMenuOpen(false)} aria-hidden="true" />
       )}
+
       <aside
         className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#0f021d]/95 border-r border-white/10 backdrop-blur-lg transform transition-transform ${
           menuOpen ? "translate-x-0" : "-translate-x-full"
@@ -321,7 +419,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
             <ShieldCheck className="w-5 h-5 text-emerald-400" />
             PutriStore
           </div>
-          <button onClick={() => setMenuOpen(false)} aria-label="Close menu">
+          <button onClick={( ) => setMenuOpen(false)} aria-label="Close menu">
             <X className="w-5 h-5 text-white/70" />
           </button>
         </div>
@@ -338,14 +436,21 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
         </nav>
       </aside>
 
-      <main className="max-w-4xl mx-auto px-4 py-12 space-y-6">
-        <header className="mb-6 space-y-2">
-          <p className="text-sm uppercase tracking-[0.3em] text-white/60">Premium Flow</p>
-          <h1 className="text-4xl font-extrabold">Luxury Order Experience</h1>
-          <p className="text-white/70 max-w-2xl">
-            Pilih platform favoritmu, tentukan jenis layanan, dan nikmati proses pembayaran modern
-            lengkap dengan monitoring admin.
-          </p>
+      <main className="max-w-5xl mx-auto px-4 py-12 space-y-6">
+        <header className="mb-8 flex items-center justify-between">
+          <div>
+            <p className="text-sm uppercase tracking-[0.3em] text-white/60">Premium Flow</p>
+            <h1 className="text-4xl font-extrabold">Luxury Order Experience</h1>
+            <p className="text-white/70 max-w-2xl">
+              Pilih platform favoritmu, tentukan jenis layanan, dan nikmati proses pembayaran modern
+              lengkap dengan monitoring admin.
+            </p>
+          </div>
+          <img
+            src={AVATAR_URL}
+            alt="Avatar"
+            className="w-16 h-16 rounded-full border-2 border-white/50 object-cover shadow-lg"
+          />
         </header>
 
         {error && (
@@ -382,31 +487,35 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
             </div>
 
             {categoryLoading ? (
-              <p className="text-sm text-white/60">Memuat kategoriï¿½</p>
+              <p className="text-sm text-white/60">Memuat kategori…</p>
             ) : (
               selectedPlatform && (
                 <div className="flex flex-wrap gap-2">
-                  {categories.map((cat) => (
-                    <button
-                      key={cat}
-                      type="button"
-                      onClick={() => setSelectedCategory(cat)}
-                      className={`px-4 py-2 rounded-full text-sm border ${
-                        selectedCategory === cat
-                          ? "bg-white text-purple-800 border-white"
-                          : "bg-white/5 border-white/10 text-white/70 hover:bg-white/10"
-                      }`}
-                    >
-                      {cat}
-                    </button>
-                  ))}
+                  {categories.map((cat) => {
+                    const Icon = CATEGORY_ICONS[cat] || CATEGORY_ICONS.Other;
+                    return (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => setSelectedCategory(cat)}
+                        className={`px-4 py-2 rounded-full text-sm border flex items-center gap-2 ${
+                          selectedCategory === cat
+                            ? "bg-white text-purple-800 border-white"
+                            : "bg-white/5 border-white/10 text-white/70 hover:bg-white/10"
+                        }`}
+                      >
+                        <Icon className="w-4 h-4" />
+                        {cat}
+                      </button>
+                    );
+                  })}
                 </div>
               )
             )}
 
             <div className="space-y-3">
               <p className="text-sm uppercase tracking-wide text-white/50">
-                Pilih layanan ({servicesLoading ? "memuatï¿½" : `${filteredServices.length} opsi`})
+                Pilih layanan ({servicesLoading ? "memuat…" : `${filteredServices.length} opsi`})
               </p>
               <div className="grid md:grid-cols-2 gap-3 max-h-[360px] overflow-y-auto pr-2">
                 {filteredServices.length === 0 && (
@@ -423,9 +532,10 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
                         selected ? "border-white shadow-lg" : "border-white/10"
                       }`}
                     >
-                      <p className="font-semibold">{srv.name}</p>
-                      <p className="text-xs text-white/60">{srv.category}</p>
-                      <div className="mt-2 text-sm text-white/80">
+                      <p className="text-xs text-white/50">ID: {srv.provider_service_id}</p>
+                      <p className="font-semibold text-lg">{srv.name}</p>
+                      <p className="text-xs text-white/60 mb-2">{srv.category}</p>
+                      <div className="text-sm text-white/80">
                         <p>Harga: {formatIDR((srv.rate_per_1k || 0) / 1000)} / qty</p>
                         <p>
                           Min/Max: {srv.min} - {srv.max}
@@ -439,32 +549,6 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
 
             {selectedService && (
               <>
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <label className="text-sm text-white/80 space-y-1 block">
-                    Quantity
-                    <input
-                      className="w-full rounded-2xl bg-white/5 border border-white/10 px-4 py-3 outline-none"
-                      type="number"
-                      min={selectedService.min || 1}
-                      max={selectedService.max || undefined}
-                      value={quantity}
-                      onChange={(e) => setQuantity(Number(e.target.value))}
-                    />
-                    <span className="text-xs text-white/50">
-                      Min {selectedService.min} ï¿½ Max {selectedService.max}
-                    </span>
-                  </label>
-                  <label className="text-sm text-white/80 space-y-1 block">
-                    Target
-                    <input
-                      className="w-full rounded-2xl bg-white/5 border border-white/10 px-4 py-3 outline-none"
-                      value={target}
-                      onChange={(e) => setTarget(e.target.value)}
-                      placeholder="username / link / catatan"
-                    />
-                  </label>
-                </div>
-
                 <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm grid sm:grid-cols-2 gap-3">
                   <div>
                     <p className="text-white/50">Perkiraan Harga</p>
@@ -474,6 +558,33 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
                     <p className="text-white/50">Per 1.000 qty</p>
                     <p>{formatIDR(selectedService.rate_per_1k)}</p>
                   </div>
+                </div>
+
+                <label className="text-sm text-white/80 space-y-1 block">
+                  Quantity
+                  <input
+                    className="w-full rounded-2xl bg-white/5 border border-white/10 px-4 py-3 outline-none"
+                    type="number"
+                    min={selectedService.min || 1}
+                    max={selectedService.max || undefined}
+                    value={quantity}
+                    onChange={(e) => setQuantity(Number(e.target.value))}
+                  />
+                </label>
+
+                <label className="text-sm text-white/80 space-y-1 block">
+                  Target
+                  <input
+                    className="w-full rounded-2xl bg-white/5 border border-white/10 px-4 py-3 outline-none"
+                    value={target}
+                    onChange={(e) => setTarget(e.target.value)}
+                    placeholder="username / link / catatan"
+                  />
+                </label>
+
+                <div className="text-sm text-white/70 border border-white/10 rounded-2xl p-4 bg-black/20">
+                  <p className="font-semibold text-white">Deskripsi Layanan</p>
+                  <p>{selectedService.description || "Deskripsi belum tersedia dari panel."}</p>
                 </div>
               </>
             )}
@@ -489,7 +600,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
                 />
                 <input
                   className="rounded-2xl bg-white/5 border border-white/10 px-4 py-3 outline-none"
-                  placeholder="No. HP"
+                  placeholder="No. WhatsApp"
                   value={customer.phone}
                   onChange={(e) => setCustomer((c) => ({ ...c, phone: e.target.value }))}
                 />
@@ -504,117 +615,151 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
 
             <button
               type="submit"
-              disabled={loading || !selectedService}
+              disabled={!selectedService}
               onClick={handleCheckout}
               className="w-full rounded-2xl bg-gradient-to-r from-blue-500 to-indigo-500 py-3 font-semibold disabled:opacity-50"
             >
-              {loading ? "Memprosesï¿½" : "Lanjutkan Pembayaran"}
+              Lanjutkan Pembayaran
             </button>
-
-            {selectedService?.description && (
-              <div className="text-sm text-white/70 border border-white/10 rounded-2xl p-4 bg-black/20">
-                <p className="font-semibold text-white">Deskripsi Layanan</p>
-                <p>{selectedService.description}</p>
-              </div>
-            )}
 
             <p className="text-xs text-white/40 text-center">Server: {apiBase}</p>
           </section>
         )}
 
         {step === 2 && order && (
-          <section className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur p-6 space-y-4">
+          <section className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur p-6 space-y-6">
             {renderStepTitle("2", "Konfirmasi Pembayaran")}
-            <div className="text-sm text-white/70 space-y-1">
-              <p>Order ID: {order.order_id}</p>
-              <p>Jumlah pesanan: {order.quantity}</p>
-              <p>Batas bayar: {new Date(order.payment?.expires_at).toLocaleString()}</p>
-            </div>
-            <label className="text-sm text-white/80 space-y-1 block">
-              Metode Bayar
-              <select
-                className="w-full rounded-2xl bg-white/5 border border-white/10 px-4 py-3 outline-none"
-                value={payment.method}
-                onChange={(e) => setPayment((p) => ({ ...p, method: e.target.value }))}
-              >
-                <option value="qris">QRIS</option>
-                <option value="transfer">Transfer Bank</option>
-              </select>
-            </label>
-            <label className="text-sm text-white/80 space-y-1 block">
-              Nominal (Rp)
-              <input
-                className="w-full rounded-2xl bg-white/5 border border-white/10 px-4 py-3 outline-none"
-                type="number"
-                min="0"
-                value={payment.amount}
-                onChange={(e) => setPayment((p) => ({ ...p, amount: e.target.value }))}
-              />
-            </label>
-            <button
-              onClick={handlePaymentMethod}
-              disabled={loading}
-              className="w-full rounded-2xl bg-green-500/80 py-3 font-semibold"
-            >
-              {loading ? "Menyimpanï¿½" : "Saya Sudah Membayar"}
-            </button>
-          </section>
-        )}
-
-        {step === 3 && order && (
-          <section className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur p-6 space-y-4">
-            {renderStepTitle("3", "Upload Bukti Pembayaran")}
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => setProof(e.target.files?.[0] || null)}
-              className="w-full rounded-2xl border border-dashed border-white/20 bg-white/5 px-4 py-6 text-sm text-white/70"
-            />
-            <button
-              onClick={handleUploadProof}
-              disabled={loading || !proof}
-              className="w-full rounded-2xl bg-indigo-500 py-3 font-semibold disabled:opacity-50"
-            >
-              {loading ? "Mengunggahï¿½" : "Upload & Lanjutkan"}
-            </button>
-          </section>
-        )}
-
-        {step === 4 && order && (
-          <section className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur p-6 space-y-4">
-            {renderStepTitle("4", "Struk Menunggu Konfirmasi")}
-            <div className="grid sm:grid-cols-2 gap-3 text-sm text-white/80">
+            <div className="grid sm:grid-cols-2 gap-4 text-sm text-white/80">
               <div>
                 <p className="text-white/50">Order ID</p>
                 <p className="font-semibold">{order.order_id}</p>
               </div>
               <div>
-                <p className="text-white/50">Status</p>
-                <p className="font-semibold">{order.status}</p>
-              </div>
-              <div>
-                <p className="text-white/50">Service</p>
+                <p className="text-white/50">ID Layanan</p>
                 <p>{order.service_id}</p>
               </div>
               <div>
-                <p className="text-white/50">Quantity</p>
-                <p>{order.quantity}</p>
+                <p className="text-white/50">Nama</p>
+                <p>{customer.name || "-"}</p>
               </div>
-              <div className="sm:col-span-2">
-                <p className="text-white/50">Target</p>
-                <p>{order.target}</p>
+              <div>
+                <p className="text-white/50">Nomor WhatsApp</p>
+                <p>{customer.phone || "-"}</p>
               </div>
-              <div className="sm:col-span-2">
+              <div>
+                <p className="text-white/50">Email</p>
+                <p>{customer.email || "-"}</p>
+              </div>
+              <div>
+                <p className="text-white/50">Jam Order (WITA)</p>
+                <p>{formatWitaTime(orderTimestamp)}</p>
+              </div>
+              <div>
+                <p className="text-white/50">Tanggal Order</p>
+                <p>{formatWitaDate(orderTimestamp)}</p>
+              </div>
+              <div>
                 <p className="text-white/50">Nominal</p>
-                <p>{formatIDR(payment.amount)}</p>
+                <p className="text-lg font-semibold">{formatIDR(payment.amount || pricePreview)}</p>
               </div>
             </div>
-            <textarea
-              className="w-full rounded-2xl bg-white/5 border border-white/10 px-4 py-3 text-sm"
-              rows={3}
-              value="Silakan tunggu admin melakukan verifikasi pembayaran. Jika butuh bantuan cepat, gabung ke grup WhatsApp berikut."
-              readOnly
-            />
+
+            <div className="space-y-3">
+              <p className="text-sm text-white/70">Pilih Metode Pembayaran</p>
+              <div className="grid sm:grid-cols-4 gap-3">
+                {PAYMENT_METHODS.map((method) => {
+                  const Icon = method.icon;
+                  return (
+                    <button
+                      key={method.key}
+                      type="button"
+                      onClick={() => setPayment((p) => ({ ...p, method: method.key }))}
+                      className={`rounded-2xl border px-4 py-3 text-sm flex items-center gap-2 justify-center ${
+                        payment.method === method.key
+                          ? "border-white bg-white/10"
+                          : "border-white/10 bg-white/5"
+                      }`}
+                    >
+                      <Icon className="w-4 h-4" />
+                      {method.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {payment.method === "qris" && (
+                <div className="rounded-2xl border border-white/20 bg-black/30 p-4 text-center">
+                  <p className="text-sm text-white/70 mb-2">Scan QRIS berikut:</p>
+                  <img
+                    src={QRIS_IMAGE_URL}
+                    alt="QRIS"
+                    className="mx-auto max-w-[280px] rounded-xl border border-white/10"
+                  />
+                </div>
+              )}
+              {payment.method === "dana" && (
+                <div className="rounded-2xl border border-white/20 bg-black/30 p-4 text-sm text-white/70">
+                  Kirim pembayaran ke akun Dana: <span className="text-white">08xx-xxxx-xxxx (Putri)</span>
+                </div>
+              )}
+              {payment.method === "ovo" && (
+                <div className="rounded-2xl border border-white/20 bg-black/30 p-4 text-sm text-white/70">
+                  Kirim pembayaran ke akun OVO: <span className="text-white">08xx-xxxx-xxxx (Putri)</span>
+                </div>
+              )}
+              {payment.method === "bri" && (
+                <div className="rounded-2xl border border-white/20 bg-black/30 p-4 text-sm text-white/70">
+                  Transfer ke rek. BRI <span className="text-white">1234-5678-90 a.n Putri Store</span>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm text-white/80 space-y-1 block">
+                Upload Bukti Pembayaran
+                <div className="rounded-2xl border border-dashed border-white/30 bg-white/5 px-4 py-6 text-center text-sm text-white/70">
+                  <Images className="w-6 h-6 mx-auto mb-2" />
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setProof(e.target.files?.[0] || null)}
+                    className="w-full text-center"
+                  />
+                </div>
+              </label>
+              <button
+                onClick={handlePaymentMethod}
+                disabled={!proof}
+                className="w-full rounded-2xl bg-green-500 py-3 font-semibold disabled:opacity-50"
+              >
+                Saya sudah membayar
+              </button>
+            </div>
+          </section>
+        )}
+
+        {step === 4 && order && (
+          <section className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur p-6 space-y-4">
+            {renderStepTitle("3", "Struk Menunggu Konfirmasi")}
+            {receiptImage ? (
+              <img
+                src={receiptImage}
+                alt="Struk Premium"
+                className="w-full rounded-2xl border border-white/20"
+              />
+            ) : (
+              <div className="text-sm text-white/70">Sedang membuat gambar struk…</div>
+            )}
+            {receiptImage && (
+              <a
+                href={receiptImage}
+                download={`Struk-${order.order_id}.png`}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-white/20 border border-white/30 text-sm"
+              >
+                <Download className="w-4 h-4" />
+                Download Struk
+              </a>
+            )}
             <div className="grid sm:grid-cols-2 gap-3">
               <button
                 onClick={() => window.open(WHATSAPP_GROUP_LINK, "_blank")}
@@ -623,12 +768,19 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
                 Gabung ke Grup WhatsApp
               </button>
               <button
-                onClick={resetFlow}
-                className="rounded-2xl border border-white/20 py-3 font-semibold text-white/80"
+                onClick={handleStatusCheck}
+                className="rounded-2xl border border-white/20 py-3 font-semibold text-white/80 flex items-center justify-center gap-2"
               >
-                Buat Order Baru
+                <Clock className="w-4 h-4" />
+                Status Order
               </button>
             </div>
+            <button
+              onClick={resetFlow}
+              className="w-full rounded-2xl bg-white/10 border border-white/20 py-3 text-sm text-white/80"
+            >
+              Buat order baru
+            </button>
           </section>
         )}
       </main>

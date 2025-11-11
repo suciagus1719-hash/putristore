@@ -1,10 +1,11 @@
-// backend/api/order/paymentFlow.js
+﻿// backend/api/order/paymentFlow.js
 const express = require("express");
 const multer = require("multer");
 const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "https://suciagus1719-hash.github.io";
 const path = require("path");
 const fs = require("fs");
 const fetch = global.fetch || require("node-fetch");
+const { kv } = require("@vercel/kv");
 
 const router = express.Router();
 
@@ -39,6 +40,31 @@ router.use("/uploads/bukti", express.static(uploadDir));
 
 // order store sederhana (ganti ke DB kalau perlu)
 const orders = new Map();
+
+async function cacheOrder(order) {
+  if (!order?.order_id) return;
+  orders.set(order.order_id, order);
+  try {
+    await kv.set(`payment-flow:${order.order_id}`, JSON.stringify(order), { ex: 60 * 60 * 24 });
+  } catch (err) {
+    console.error("kv set error", err);
+  }
+}
+
+async function loadOrder(orderId) {
+  if (!orderId) return null;
+  if (orders.has(orderId)) return orders.get(orderId);
+  try {
+    const raw = await kv.get(`payment-flow:${orderId}`);
+    if (!raw) return null;
+    const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+    if (parsed?.order_id) orders.set(orderId, parsed);
+    return parsed;
+  } catch (err) {
+    console.error("kv get error", err);
+    return null;
+  }
+}
 // helper bikin ID
 const createOrderId = () => `ORD-${Date.now().toString(36).toUpperCase()}`;
 
@@ -118,8 +144,8 @@ async function pushOrderToPanel(order) {
   }
 }
 
-// checkout – hanya simpan, status pending_payment
-router.post("/order/checkout", (req, res) => {
+// checkout â€“ hanya simpan, status pending_payment
+router.post("/order/checkout", async (req, res) => {
   const { service_id, quantity, target, customer = {} } = req.body || {};
   if (!service_id || !target || !Number.isFinite(Number(quantity)) || quantity <= 0) {
     return res.status(422).json({ ok: false, message: "Data tidak lengkap" });
@@ -141,25 +167,26 @@ router.post("/order/checkout", (req, res) => {
     },
     created_at: new Date().toISOString(),
   };
-  orders.set(order_id, order);
+  await cacheOrder(order);
   return res.json({ ok: true, order });
 });
 
 // pilih metode bayar + nominal
-router.post("/order/payment-method", (req, res) => {
+router.post("/order/payment-method", async (req, res) => {
   const { order_id, method, amount } = req.body || {};
-  const order = orders.get(order_id);
+  const order = await loadOrder(order_id);
   if (!order) return res.status(404).json({ ok: false, message: "Order tidak ditemukan" });
   order.payment.method = method;
   order.payment.amount = Number(amount);
   order.status = "waiting_payment_proof";
+  await cacheOrder(order);
   return res.json({ ok: true, order });
 });
 
 // upload bukti transfer
-router.post("/order/upload-proof", upload.single("proof"), (req, res) => {
+router.post("/order/upload-proof", upload.single("proof"), async (req, res) => {
   const { order_id } = req.body || {};
-  const order = orders.get(order_id);
+  const order = await loadOrder(order_id);
   if (!order) return res.status(404).json({ ok: false, message: "Order tidak ditemukan" });
   if (!req.file) return res.status(400).json({ ok: false, message: "Bukti wajib diupload" });
 
@@ -167,6 +194,7 @@ router.post("/order/upload-proof", upload.single("proof"), (req, res) => {
   order.payment.proof_url = fileUrl;
   order.payment.uploaded_at = new Date().toISOString();
   order.status = "waiting_review";
+  await cacheOrder(order);
   return res.json({ ok: true, order });
 });
 
@@ -186,7 +214,7 @@ router.get("/admin/orders", (_, res) => {
 
 // admin: update status
 router.post("/admin/orders/:orderId/status", async (req, res) => {
-  const order = orders.get(req.params.orderId);
+  const order = await loadOrder(req.params.orderId);
   if (!order) return res.status(404).json({ ok: false, message: "Tidak ada" });
   const nextStatus = req.body.status || order.status;
   order.admin_note = req.body.admin_note || null;
@@ -204,11 +232,13 @@ router.post("/admin/orders/:orderId/status", async (req, res) => {
   }
 
   order.status = nextStatus;
+  await cacheOrder(order);
 
   return res.json({ ok: true, order });
 });
 
 module.exports = router;
+
 
 
 

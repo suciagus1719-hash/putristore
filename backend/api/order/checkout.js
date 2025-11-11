@@ -20,7 +20,6 @@ function genOrderId() {
 // (opsional) simpan order ke storage/DB kamu
 async function saveOrder(order) {
   // TODO: tulis ke SQLite / file / firestore sesuai selera
-  // contoh dummy:
   return true;
 }
 
@@ -32,27 +31,22 @@ module.exports = async function handler(req, res) {
 
   try {
     const body = safeJson(req.body);
-    const { service_id, quantity, link, customer = {} } = body;
 
-  // === VALIDASI WAJIB ===
-if (!service_id) {
-  return res.status(422).json({ ok: false, message: "service_id wajib diisi" });
-}
+    // --- terima 'target' bebas; tetap kompatibel jika client lama masih kirim 'link'
+    let { service_id, quantity, target, link, customer = {} } = body;
+    if (!target && link) target = link;
 
-// pastikan quantity angka valid
-const qty = Number(quantity);
-if (!Number.isFinite(qty) || qty <= 0) {
-  return res.status(422).json({ ok: false, message: "quantity harus berupa angka > 0" });
-}
-
-// pastikan link bukan kosong & berbentuk URL (http/https)
-try {
-  const u = new URL(String(link));
-  if (!/^https?:$/.test(u.protocol)) throw new Error();
-} catch {
-  return res.status(422).json({ ok: false, message: "link harus URL valid (mis. https://...)" });
-}
-
+    // === VALIDASI RINGAN (tanpa memaksa URL) ===
+    if (!service_id) {
+      return res.status(422).json({ ok: false, message: 'service_id wajib diisi' });
+    }
+    const qty = Number(quantity);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      return res.status(422).json({ ok: false, message: 'quantity harus angka > 0' });
+    }
+    if (!target || String(target).trim().length < 1) {
+      return res.status(422).json({ ok: false, message: 'target wajib diisi (bebas)' });
+    }
 
     const order_id = genOrderId();
 
@@ -62,8 +56,8 @@ try {
       `=====================`,
       `Order ID : ${order_id}`,
       `Service  : ${service_id}`,
-      `Quantity : ${quantity}`,
-      `Data     : ${link}`,
+      `Quantity : ${qty}`,
+      `Target   : ${target}`,
       customer?.name ? `Nama     : ${customer.name}` : null,
       customer?.phone ? `HP       : ${customer.phone}` : null,
       customer?.email ? `Email    : ${customer.email}` : null,
@@ -76,10 +70,10 @@ try {
     await saveOrder({
       order_id,
       service_id,
-      quantity,
-      link,
+      quantity: qty,
+      target,
       customer,
-      status: 'pending', // menunggu pembayaran (sesuai alur barumu)
+      status: 'pending',
       created_at: new Date().toISOString(),
     });
 
@@ -89,13 +83,12 @@ try {
       order: {
         order_id,
         service_id,
-        quantity,
-        link,
+        quantity: qty,
+        target,      // <- penting: kirim target ke FE
         customer,
         status: 'MENUNGGU PEMBAYARAN',
       },
       wa_link,
-      // Kamu bisa kirim "teks_struk_default" untuk ditampilkan di UI (bisa kamu override di FE)
       receipt_message_default:
         'Silakan lakukan pembayaran sesuai instruksi. Setelah itu tekan "Lanjutkan ke WhatsApp" agar order diproses admin.',
     });

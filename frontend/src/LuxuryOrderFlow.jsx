@@ -46,60 +46,54 @@ export default function LuxuryOrderFlow() {
   }
 
 
-  async function handleCheckout(e) {
-    e?.preventDefault?.();
-    setError("");
-    setLoading(true);
+async function handleCheckout(e) {
+  e?.preventDefault?.();
+  setError("");
+  setLoading(true);
 
-    try {
-      const payload = {
-        service_id: serviceId?.trim(),
-        quantity: Number(quantity),
-        target: target, // bebas: username / link / catatan
-        customer: {
-          name: customerName?.trim() || undefined,
-          phone: customerPhone?.trim() || undefined,
-          email: customerEmail?.trim() || undefined,
-        },
-      };
+  try {
+    const trimmedServiceId = (serviceId || "").trim();
+    const trimmedTarget    = (target || "").trim();
+    const qty              = Number(quantity);
 
-      // Perbaikan ringan: jika user mengetik target tanpa http/https tapi kamu ingin biarkan apa adanya,
-      // JANGAN diubah. Biarkan backend menerima "target" bebas.
-
-      // Debug lokal (bisa kamu nonaktifkan nanti)
-      // console.log("checkout payload →", payload);
-
-      const r = await fetch(`${apiBase}/api/order/checkout`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      const text = await r.text();
-      let j;
-      try {
-        j = JSON.parse(text);
-      } catch {
-        j = { ok: false, message: text };
-      }
-
-      // console.log("checkout response →", r.status, j);
-
-      if (!r.ok || !j.ok) {
-        throw new Error(j?.message || `Gagal (${r.status})`);
-      }
-
-      // Sukses → tampilkan struk
-      setReceipt({ order: j.order, wa_link: j.wa_link });
-      if (j.receipt_message_default) {
-        setReceiptMessage(j.receipt_message_default);
-      }
-    } catch (err) {
-      setError(err.message || String(err));
-    } finally {
+    if (!trimmedServiceId || !trimmedTarget || !Number.isFinite(qty) || qty <= 0) {
+      setError("Pilih layanan, isi target, dan jumlah minimal 1.");
       setLoading(false);
+      return;
     }
+
+    const payload = {
+      service_id: trimmedServiceId,
+      quantity: qty,
+      target: trimmedTarget,
+      link: trimmedTarget, // supaya backend lama tetap paham
+      customer: {
+        name:  customerName?.trim()  || undefined,
+        phone: customerPhone?.trim() || undefined,
+        email: customerEmail?.trim() || undefined,
+      },
+    };
+
+    const r = await fetch(`${apiBase}/api/order/checkout`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    const text = await r.text();
+    const j = (() => { try { return JSON.parse(text); } catch { return { ok:false, message:text }; } })();
+
+    if (!r.ok || !j.ok) throw new Error(j?.message || `Gagal (${r.status})`);
+
+    setReceipt({ order: j.order, wa_link: j.wa_link });
+    if (j.receipt_message_default) setReceiptMessage(j.receipt_message_default);
+  } catch (err) {
+    setError(err.message || String(err));
+  } finally {
+    setLoading(false);
   }
+}
+
 
   // ====== RENDER STRUK ======
   if (receipt) {

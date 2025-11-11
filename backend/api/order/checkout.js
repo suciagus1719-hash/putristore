@@ -1,6 +1,6 @@
 // backend/api/order/checkout.js
+const { saveOrder } = require("./orderStore");
 const ALLOW_ORIGIN = process.env.CORS_ORIGIN || '*';
-
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', ALLOW_ORIGIN);
@@ -15,12 +15,6 @@ function safeJson(body) {
 
 function genOrderId() {
   return 'ORD-' + Date.now().toString(36).toUpperCase();
-}
-
-// (opsional) simpan order ke storage/DB kamu
-async function saveOrder(order) {
-  // TODO: tulis ke SQLite / file / firestore sesuai selera
-  return true;
 }
 
 module.exports = async function handler(req, res) {
@@ -49,29 +43,28 @@ module.exports = async function handler(req, res) {
     }
 
     const order_id = genOrderId();
-
-    // Simpan sebagai pending (opsional)
-    await saveOrder({
+    const order = {
       order_id,
       service_id,
       quantity: qty,
       target,
       customer,
-      status: 'pending',
+      status: 'pending_payment',
+      payment: {
+        method: null,
+        amount: null,
+        proof_url: null,
+        uploaded_at: null,
+      },
       created_at: new Date().toISOString(),
-    });
+    };
+
+    await saveOrder(order);
 
     // kembalikan untuk render struk
     return res.status(200).json({
       ok: true,
-      order: {
-        order_id,
-        service_id,
-        quantity: qty,
-        target,      // <- penting: kirim target ke FE
-        customer,
-        status: 'MENUNGGU PEMBAYARAN',
-      },
+      order,
       receipt_message_default:
         'Silakan lakukan pembayaran sesuai instruksi. Setelah itu tekan "Saya sudah membayar" agar order diproses admin.',
     });

@@ -21,6 +21,11 @@ import {
   Images,
   Download,
   Clock,
+  AtSign,
+  Music,
+  Film,
+  MessageSquare,
+  Gamepad2,
 } from "lucide-react";
 
 const WHATSAPP_GROUP_LINK = "https://chat.whatsapp.com/link-grup-kamu";
@@ -37,6 +42,11 @@ const PLATFORM_CARDS = [
   { key: "Facebook", label: "Facebook", accent: "from-sky-600 to-blue-700", icon: Facebook },
   { key: "Telegram", label: "Telegram", accent: "from-cyan-400 to-blue-500", icon: Send },
   { key: "Shopee", label: "Shopee", accent: "from-orange-500 to-amber-500", icon: ShoppingBag },
+  { key: "Threads", label: "Threads", accent: "from-gray-900 to-black", icon: AtSign },
+  { key: "WhatsApp", label: "WhatsApp", accent: "from-emerald-500 to-lime-500", icon: MessageCircle },
+  { key: "Spotify", label: "Spotify", accent: "from-green-500 to-emerald-600", icon: Music },
+  { key: "Discord", label: "Discord", accent: "from-indigo-500 to-purple-600", icon: Gamepad2 },
+  { key: "Snack Video", label: "Snack Video", accent: "from-yellow-400 to-orange-500", icon: Film },
 ];
 
 const getPlatformIcon = (platform) =>
@@ -77,6 +87,11 @@ const guessPlatform = (s = "") => {
   const n = String(s).toLowerCase();
   if (n.includes("tiktok")) return "TikTok";
   if (n.includes("instagram")) return "Instagram";
+  if (n.includes("threads")) return "Threads";
+  if (n.includes("whatsapp") || n.includes(" wa ") || n.startsWith("wa ") || n.includes("wa.")) return "WhatsApp";
+  if (n.includes("spotify")) return "Spotify";
+  if (n.includes("discord")) return "Discord";
+  if (n.includes("snack") && n.includes("video")) return "Snack Video";
   if (n.includes("youtube")) return "YouTube";
   if (n.includes("facebook")) return "Facebook";
   if (n.includes("telegram")) return "Telegram";

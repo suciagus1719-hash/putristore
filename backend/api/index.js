@@ -9,10 +9,10 @@ const crypto = require("crypto");
 const fetch = global.fetch || require("node-fetch");
 const { kv } = require("@vercel/kv");
 const paymentFlow = require("./order/paymentFlow");
-app.use("/api", paymentFlow);
 
 const app = express();
 app.use(express.json({ limit: "200kb" }));
+app.use("/api", paymentFlow);
 
 // CORS middleware (sesuaikan FRONTEND_ORIGIN di env untuk production)
 app.use((req, res, next) => {

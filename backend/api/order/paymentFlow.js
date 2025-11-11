@@ -3,6 +3,7 @@ const express = require("express");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
+const fetch = global.fetch || require("node-fetch");
 
 const router = express.Router();
 
@@ -14,10 +15,89 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 }, // max 5MB
 });
 
+// expose folder bukti agar bisa dilihat admin (gunakan CDN/storage permanen untuk produksi)
+router.use("/uploads/bukti", express.static(uploadDir));
+
 // order store sederhana (ganti ke DB kalau perlu)
 const orders = new Map();
 // helper bikin ID
 const createOrderId = () => `ORD-${Date.now().toString(36).toUpperCase()}`;
+
+// Env panel
+const PANEL_API_URL =
+  process.env.SMMPANEL_BASE_URL ||
+  process.env.PANEL_API_URL ||
+  "https://pusatpanelsmm.com/api/json.php";
+const PANEL_KEY = process.env.SMMPANEL_API_KEY;
+const PANEL_SECRET = process.env.SMMPANEL_SECRET;
+
+async function pushOrderToPanel(order) {
+  if (!PANEL_KEY || !PANEL_SECRET) {
+    return { ok: false, message: "ENV panel belum diset" };
+  }
+
+  const basePayload = {
+    api_key: PANEL_KEY,
+    secret_key: PANEL_SECRET,
+    action: "add",
+    service: String(order.service_id),
+    link: String(order.target),
+    quantity: String(order.quantity),
+  };
+
+  const tryCall = async (headers, body) => {
+    const resp = await fetch(PANEL_API_URL, {
+      method: "POST",
+      headers,
+      body,
+    });
+    const text = await resp.text();
+    let json;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      json = null;
+    }
+    return { resp, json, raw: text };
+  };
+
+  try {
+    // pertama: form-urlencoded
+    let { resp, json, raw } = await tryCall(
+      {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Accept: "application/json",
+      },
+      new URLSearchParams(basePayload)
+    );
+
+    if (!resp.ok || !json || json.status !== true || !json.data?.id) {
+      ({ resp, json, raw } = await tryCall(
+        {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        JSON.stringify({
+          ...basePayload,
+          service: Number(order.service_id),
+          quantity: Number(order.quantity),
+        })
+      ));
+
+      if (!resp.ok || !json || json.status !== true || !json.data?.id) {
+        return {
+          ok: false,
+          message: "Panel menolak order",
+          detail: json || raw,
+        };
+      }
+    }
+
+    return { ok: true, provider_order_id: String(json.data.id), raw: json };
+  } catch (e) {
+    return { ok: false, message: e.message || "Gagal konek panel" };
+  }
+}
 
 // checkout – hanya simpan, status pending_payment
 router.post("/order/checkout", (req, res) => {
@@ -86,11 +166,26 @@ router.get("/admin/orders", (_, res) => {
 });
 
 // admin: update status
-router.post("/admin/orders/:orderId/status", (req, res) => {
+router.post("/admin/orders/:orderId/status", async (req, res) => {
   const order = orders.get(req.params.orderId);
   if (!order) return res.status(404).json({ ok: false, message: "Tidak ada" });
-  order.status = req.body.status || order.status;
+  const nextStatus = req.body.status || order.status;
   order.admin_note = req.body.admin_note || null;
+
+  if (nextStatus === "approved" && !order.provider_order_id) {
+    const panelResult = await pushOrderToPanel(order);
+    if (!panelResult.ok) {
+      return res.status(502).json({
+        ok: false,
+        message: panelResult.message || "Gagal teruskan ke panel",
+        detail: panelResult.detail,
+      });
+    }
+    order.provider_order_id = panelResult.provider_order_id;
+  }
+
+  order.status = nextStatus;
+
   return res.json({ ok: true, order });
 });
 

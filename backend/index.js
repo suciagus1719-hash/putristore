@@ -85,6 +85,8 @@ const API_URL =
 
 const API_KEY = process.env.SMMPANEL_API_KEY;
 const SECRET  = process.env.SMMPANEL_SECRET;
+const IPAYMU_VA = process.env.IPAYMU_VA;
+const IPAYMU_API = process.env.IPAYMU_API;
 
 // Root
 app.get("/", (req, res) => {

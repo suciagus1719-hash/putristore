@@ -297,27 +297,67 @@ useEffect(() => {
 
 const handleCheckout = async () => {
   if (!canCheckout) return;
-  setLoading(true); setError("");
+
+  const service_id = selectedService?.provider_service_id
+    ?? selectedService?.service_id
+    ?? selectedService?.id
+    ?? serviceId;
+
+  if (!service_id) {
+    setError("Layanan tidak valid. Silakan pilih ulang.");
+    return;
+  }
+
+  setLoading(true);
+  setError("");
+
   try {
-    const amount = Math.max(1000, Number(preview) || Number(quantity) || 1000);
-    const r = await fetch(`${apiBase}/api/paymu_checkout`, {
+    const payload = {
+      service_id,
+      link,
+      quantity,
+      service_name: selectedService?.name,
+      charge: preview ?? null,
+      name: "Guest", // <-- ganti sesuai sumber nama akunmu
+      email: "test@example.com",
+      phone: "08123456789",
+    };
+
+    const r = await fetch(`${apiBase}/api/order/checkout`, {
       method: "POST",
-      headers: { "Content-Type":"application/json" },
-      body: JSON.stringify({
-        name: "Guest", // <-- ganti sesuai sumber nama akunmu
-        email: "test@example.com",
-        phone: "08123456789",
-        amount
-      })
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
     });
-    
 
     const j = await r.json();
-    if (j?.ok && j?.checkout_url) {
-      window.location.assign(j.checkout_url);      // ⬅️ langsung buka halaman pembayaran iPaymu
+
+    if (!r.ok || !j?.ok) {
+      setError(j?.message || j?.result?.Message || "Gagal membuat pembayaran.");
       return;
     }
-    setError(j?.result?.Message || j?.message || "Gagal membuat pembayaran.");
+
+    if (j?.order_id) {
+      saveOrderMeta({
+        order_id: String(j.order_id),
+        target: link,
+        service_name: selectedService?.name ?? null,
+        quantity,
+        charge: preview ?? null,
+        created_at: new Date().toISOString(),
+      });
+    }
+
+    if (j?.invoice) {
+      setInvoice(j.invoice);
+      return;
+    }
+
+    if (j?.checkout_url) {
+      window.location.assign(j.checkout_url); // ⬅️ langsung buka halaman pembayaran iPaymu
+      return;
+    }
+
+    setError("Respons checkout tidak dikenali.");
   } catch (e) {
     setError(String(e?.message || e));
   } finally {
@@ -337,25 +377,10 @@ const fetchOrderStatus = async (id) => {
       headers: { "Accept": "application/json" },
     });
     const j = await r.json();
-// === simpan meta order ke backend ===
-if (j?.order_id) {
-  await fetch(`${apiBase}/api/order/create`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      service_id: selectedService?.provider_service_id,
-      link,
-      quantity,
-      service_name: selectedService?.name,
-      charge: preview || null,      // harga yang ditampilkan user
-    }),
-  });
-}
-if (j?.invoice) { 
-  setInvoice(j.invoice);
-} else { 
-  setError("Gagal membuat invoice"); 
-}
+
+    if (j?.invoice) {
+      setInvoice(j.invoice);
+    }
 
 
     if (r.ok && (j.status || j.order_id)) {
@@ -369,6 +394,18 @@ if (j?.invoice) {
         charge: j.charge ?? meta?.charge ?? null,
         created_at: j.created_at ?? meta?.created_at ?? null,
       };
+
+      if (merged.order_id) {
+        saveOrderMeta({
+          order_id: String(merged.order_id),
+          target: merged.target ?? link,
+          service_name: merged.service_name ?? selectedService?.name ?? null,
+          quantity: merged.quantity ?? quantity ?? null,
+          charge: merged.charge ?? preview ?? null,
+          created_at: merged.created_at ?? new Date().toISOString(),
+        });
+      }
+
       setStatusData(merged);
       return;
     }

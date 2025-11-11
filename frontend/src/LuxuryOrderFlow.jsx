@@ -563,11 +563,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
                       <p className="font-semibold text-lg">{srv.name}</p>
                       <p className="text-xs text-white/60 mb-2">{srv.category}</p>
                       <div className="text-sm text-white/80">
-                        <p>Harga: {formatIDR((srv.rate_per_1k || 0) / 1000)} / qty</p>
-                        <p>
-                          Min/Max: {srv.min} - {srv.max}
-                        </p>
-                      </div>
+                                              </div>
                     </button>
                   );
                 })}

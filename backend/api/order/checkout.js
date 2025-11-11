@@ -1,6 +1,5 @@
 // backend/api/order/checkout.js
 const ALLOW_ORIGIN = process.env.CORS_ORIGIN || '*';
-const WA_NUMBER = process.env.WA_NUMBER || process.env.FRONTEND_WA_NUMBER || '6281234567890';
 
 
 function setCors(res) {
@@ -51,22 +50,6 @@ module.exports = async function handler(req, res) {
 
     const order_id = genOrderId();
 
-    // Rangkai pesan WhatsApp untuk admin
-    const lines = [
-      `Pesanan Baru (Website)`,
-      `=====================`,
-      `Order ID : ${order_id}`,
-      `Service  : ${service_id}`,
-      `Quantity : ${qty}`,
-      `Target   : ${target}`,
-      customer?.name ? `Nama     : ${customer.name}` : null,
-      customer?.phone ? `HP       : ${customer.phone}` : null,
-      customer?.email ? `Email    : ${customer.email}` : null,
-    ].filter(Boolean);
-
-    const waMsg = lines.join('\n');
-    const wa_link = `https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(waMsg)}`;
-
     // Simpan sebagai pending (opsional)
     await saveOrder({
       order_id,
@@ -89,9 +72,8 @@ module.exports = async function handler(req, res) {
         customer,
         status: 'MENUNGGU PEMBAYARAN',
       },
-      wa_link,
       receipt_message_default:
-        'Silakan lakukan pembayaran sesuai instruksi. Setelah itu tekan "Lanjutkan ke WhatsApp" agar order diproses admin.',
+        'Silakan lakukan pembayaran sesuai instruksi. Setelah itu tekan "Saya sudah membayar" agar order diproses admin.',
     });
   } catch (e) {
     console.error('checkout error', e);

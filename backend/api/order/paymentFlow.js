@@ -4,13 +4,6 @@ const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "https://suciagus1719-has
 const path = require("path");
 const fs = require("fs");
 const fetch = global.fetch || require("node-fetch");
-let kv = null;
-try {
-  ({ kv } = require("@vercel/kv"));
-} catch (err) {
-  console.warn("@vercel/kv not available", err?.message || err);
-}
-const hasKv = Boolean(kv);
 
 const router = express.Router();
 
@@ -34,33 +27,17 @@ const upload = multer({
 router.use("/uploads/bukti", express.static(uploadDir));
 
 // order store + cache bantuan
-const orders = new Map();
+const orders = globalThis.__paymentFlowOrders || new Map();
+globalThis.__paymentFlowOrders = orders;
 
 async function cacheOrder(order) {
   if (!order?.order_id) return;
   orders.set(order.order_id, order);
-  if (!hasKv) return;
-  try {
-    await kv.set(`payment-flow:${order.order_id}`, JSON.stringify(order), { ex: 60 * 60 * 24 });
-  } catch (err) {
-    console.error("kv set error", err);
-  }
 }
 
 async function loadOrder(orderId) {
   if (!orderId) return null;
-  if (orders.has(orderId)) return orders.get(orderId);
-  if (!hasKv) return null;
-  try {
-    const raw = await kv.get(`payment-flow:${orderId}`);
-    if (!raw) return null;
-    const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
-    if (parsed?.order_id) orders.set(orderId, parsed);
-    return parsed;
-  } catch (err) {
-    console.error("kv get error", err);
-    return null;
-  }
+  return orders.get(orderId) || null;
 }
 
 // helper bikin ID

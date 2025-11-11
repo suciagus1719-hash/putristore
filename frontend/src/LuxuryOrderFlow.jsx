@@ -63,18 +63,17 @@ async function handleCheckout(e) {
 
   try {
     const payload = {
-  service_id: provider_service_id,      // wajib untuk backend
-  provider_service_id,                  // kalau masih dibutuhkan UI lain
-  target: link,                         // ganti nama 'link' jadi 'target' atau kirim dua-duanya
-  link,
-  quantity,
-  customer: { 
+  service_id: serviceId.trim(),
+  quantity: numericQty,
+  target: trimmedTarget,
+  link: trimmedTarget,
+  customer: {
+    name: customerName.trim() || undefined,
+    phone: customerPhone.trim() || undefined,
+    email: customerEmail.trim() || undefined,
+  },
+};
 
-        name: customerName.trim() || undefined,
-        phone: customerPhone.trim() || undefined,
-        email: customerEmail.trim() || undefined,
-      },
-    };
 
     const r = await fetch(`${apiBase}/api/order/checkout`, {
       method: "POST",

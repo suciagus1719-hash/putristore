@@ -160,16 +160,15 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
         );
         const data = await res.json();
         if (Array.isArray(data) && data.length) {
-          const sanitized = data.filter(Boolean);
-          const allFallback =
-            sanitized.length && sanitized.every((cat) => FALLBACK_CATEGORIES.includes(cat));
-          if (!allFallback) {
-            setCategories(sanitized);
-            setSelectedCategory("");
-          } else {
-            setCategories([]);
-            setSelectedCategory("");
-          }
+          const sanitized = data
+            .map((cat) => String(cat || "").trim())
+            .filter(Boolean);
+          const refined = sanitized.filter((cat) => {
+            const lower = cat.toLowerCase();
+            return !FALLBACK_CATEGORIES.some((fallback) => fallback.toLowerCase() === lower);
+          });
+          setCategories(refined);
+          setSelectedCategory("");
         } else {
           setCategories([]);
           setSelectedCategory("");

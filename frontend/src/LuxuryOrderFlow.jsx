@@ -224,7 +224,10 @@ const [statusOrderId, setStatusOrderId] = useState("");
 const [statusData, setStatusData] = useState(null);
 const [statusLoading, setStatusLoading] = useState(false);
 const [statusError, setStatusError] = useState("");
-
+const [receipt, setReceipt] = useState(null); // { order, wa_link }
+const [receiptMessage, setReceiptMessage] = useState(
+  'Silakan lakukan pembayaran sesuai instruksi. Klik "Lanjutkan ke WhatsApp" agar order dikonfirmasi admin.'
+);
 
 // section refs (agar menu bisa scroll ke bagian tertentu)
 const orderRef = useRef(null);
@@ -346,18 +349,33 @@ const handleCheckout = async () => {
         created_at: new Date().toISOString(),
       });
     }
+// === versi WA (tanpa gateway) ===
+if (j?.ok && j?.order && j?.wa_link) {
+  // simpan meta untuk fitur "Status" yang sudah ada
+  if (j.order?.order_id) {
+    saveOrderMeta({
+      order_id: String(j.order.order_id),
+      target: link,
+      service_name: selectedService?.name ?? null,
+      quantity,
+      charge: preview ?? null,
+      created_at: new Date().toISOString(),
+    });
+  }
 
-    if (j?.invoice) {
-      setInvoice(j.invoice);
-      return;
-    }
+  setReceipt({ order: j.order, wa_link: j.wa_link });
+  if (j.receipt_message_default) setReceiptMessage(j.receipt_message_default);
+  return;
+}
 
-    if (j?.checkout_url) {
-      window.location.assign(j.checkout_url); // ⬅️ langsung buka halaman pembayaran iPaymu
-      return;
-    }
+// fallback lama (kalau backend masih kirim invoice)
+if (j?.invoice) {
+  setInvoice(j.invoice);
+  return;
+}
 
-    setError("Respons checkout tidak dikenali.");
+setError(j?.message || "Respons checkout tidak dikenali.");
+
   } catch (e) {
     setError(String(e?.message || e));
   } finally {
@@ -537,6 +555,57 @@ const fetchOrderStatus = async (id) => {
       )}
     </div>
   );
+// ====== TAMPILKAN STRUK ORDER (MENUNGGU PEMBAYARAN) ======
+if (receipt) {
+  const o = receipt.order;
+  return (
+    <div className="min-h-[100svh] relative bg-gradient-to-b from-zinc-950 to-black text-zinc-50">
+      <GradientBg/>
+      <Header/>
+
+      <main className="max-w-2xl mx-auto px-4 py-10">
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+          <h2 className="text-2xl font-bold mb-2">Struk Order</h2>
+          <div className="grid sm:grid-cols-2 gap-2 text-sm text-zinc-200">
+            <div><span className="text-zinc-400">Order ID:</span> {o.order_id}</div>
+            <div><span className="text-zinc-400">Status:</span> MENUNGGU PEMBAYARAN</div>
+            <div><span className="text-zinc-400">Service:</span> {o.service_id}</div>
+            <div><span className="text-zinc-400">Quantity:</span> {o.quantity}</div>
+            <div className="sm:col-span-2"><span className="text-zinc-400">Data/Link:</span> {o.link}</div>
+            {o.customer?.name && <div className="sm:col-span-2"><span className="text-zinc-400">Nama:</span> {o.customer.name}</div>}
+            {o.customer?.phone && <div className="sm:col-span-2"><span className="text-zinc-400">HP:</span> {o.customer.phone}</div>}
+          </div>
+
+          <textarea
+            className="w-full mt-4 p-3 rounded-xl border border-white/10 bg-white/10"
+            rows={3}
+            value={receiptMessage}
+            onChange={(e)=>setReceiptMessage(e.target.value)}
+          />
+
+          <div className="flex gap-3 mt-4">
+            <button
+              onClick={()=> window.location.href = receipt.wa_link}
+              className="px-4 py-3 rounded-xl text-white bg-[#25D366]"
+            >
+              Lanjutkan ke WhatsApp
+            </button>
+            <button
+              onClick={()=> { setReceipt(null); }}
+              className="px-4 py-3 rounded-xl border border-white/10"
+            >
+              Ubah Data
+            </button>
+          </div>
+
+          <p className="text-xs text-zinc-400 mt-3">
+            WhatsApp akan terbuka dengan pesan yang sudah terisi. Pengguna perlu menekan tombol “Send”.
+          </p>
+        </div>
+      </main>
+    </div>
+  );
+}
 
   /* ---- RENDER ---- */
   if (invoice) {

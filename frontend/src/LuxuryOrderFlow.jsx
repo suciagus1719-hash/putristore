@@ -382,7 +382,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
             </div>
 
             {categoryLoading ? (
-              <p className="text-sm text-white/60">Memuat kategori…</p>
+              <p className="text-sm text-white/60">Memuat kategoriï¿½</p>
             ) : (
               selectedPlatform && (
                 <div className="flex flex-wrap gap-2">
@@ -406,7 +406,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
 
             <div className="space-y-3">
               <p className="text-sm uppercase tracking-wide text-white/50">
-                Pilih layanan ({servicesLoading ? "memuat…" : `${filteredServices.length} opsi`})
+                Pilih layanan ({servicesLoading ? "memuatï¿½" : `${filteredServices.length} opsi`})
               </p>
               <div className="grid md:grid-cols-2 gap-3 max-h-[360px] overflow-y-auto pr-2">
                 {filteredServices.length === 0 && (
@@ -451,7 +451,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
                       onChange={(e) => setQuantity(Number(e.target.value))}
                     />
                     <span className="text-xs text-white/50">
-                      Min {selectedService.min} • Max {selectedService.max}
+                      Min {selectedService.min} ï¿½ Max {selectedService.max}
                     </span>
                   </label>
                   <label className="text-sm text-white/80 space-y-1 block">
@@ -508,7 +508,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
               onClick={handleCheckout}
               className="w-full rounded-2xl bg-gradient-to-r from-blue-500 to-indigo-500 py-3 font-semibold disabled:opacity-50"
             >
-              {loading ? "Memproses…" : "Lanjutkan Pembayaran"}
+              {loading ? "Memprosesï¿½" : "Lanjutkan Pembayaran"}
             </button>
 
             {selectedService?.description && (
@@ -556,7 +556,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
               disabled={loading}
               className="w-full rounded-2xl bg-green-500/80 py-3 font-semibold"
             >
-              {loading ? "Menyimpan…" : "Saya Sudah Membayar"}
+              {loading ? "Menyimpanï¿½" : "Saya Sudah Membayar"}
             </button>
           </section>
         )}
@@ -575,7 +575,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
               disabled={loading || !proof}
               className="w-full rounded-2xl bg-indigo-500 py-3 font-semibold disabled:opacity-50"
             >
-              {loading ? "Mengunggah…" : "Upload & Lanjutkan"}
+              {loading ? "Mengunggahï¿½" : "Upload & Lanjutkan"}
             </button>
           </section>
         )}

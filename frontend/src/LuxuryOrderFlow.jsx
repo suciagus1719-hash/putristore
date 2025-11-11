@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+﻿import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Instagram,
@@ -51,6 +51,18 @@ const CATEGORY_ICONS = {
   Reactions: Heart,
   Other: ShieldCheck,
 };
+
+const FALLBACK_CATEGORIES = [
+  "Followers",
+  "Likes",
+  "Views",
+  "Comments",
+  "Shares",
+  "Subscribers",
+  "Members",
+  "Reactions",
+  "Other",
+];
 
 const PAYMENT_METHODS = [
   { key: "qris", label: "QRIS", icon: CreditCard },
@@ -146,8 +158,16 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
         );
         const data = await res.json();
         if (Array.isArray(data) && data.length) {
-          setCategories(data);
-          setSelectedCategory("");
+          const sanitized = data.filter(Boolean);
+          const allFallback =
+            sanitized.length && sanitized.every((cat) => FALLBACK_CATEGORIES.includes(cat));
+          if (!allFallback) {
+            setCategories(sanitized);
+            setSelectedCategory("");
+          } else {
+            setCategories([]);
+            setSelectedCategory("");
+          }
         } else {
           setCategories([]);
           setSelectedCategory("");

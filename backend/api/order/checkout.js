@@ -1,5 +1,6 @@
 // backend/api/order/checkout.js
 const ALLOW_ORIGIN = process.env.CORS_ORIGIN || '*';
+const WA_NUMBER = process.env.WA_NUMBER || process.env.FRONTEND_WA_NUMBER || '6281234567890';
 
 
 function setCors(res) {

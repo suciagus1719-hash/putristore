@@ -121,6 +121,16 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedService, setSelectedService] = useState(null);
 
+  const displayCategories = useMemo(() => {
+    return categories
+      .map((cat) => String(cat || "").trim())
+      .filter((cat) => {
+        if (!cat) return false;
+        const lower = cat.toLowerCase();
+        return !FALLBACK_CATEGORIES.some((fallback) => fallback.toLowerCase() === lower);
+      });
+  }, [categories]);
+
   const [serviceId, setServiceId] = useState("");
   const [quantity, setQuantity] = useState(100);
   const [target, setTarget] = useState("");

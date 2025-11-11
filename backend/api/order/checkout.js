@@ -1,6 +1,6 @@
 // backend/api/order/checkout.js
 const ALLOW_ORIGIN = process.env.CORS_ORIGIN || '*';
-const WA_NUMBER = process.env.WA_NUMBER || '6281234567890'; // nomor admin (tanpa +)
+const WA_NUMBER = process.env.WA_NUMBER || '628232233452'; // nomor admin (tanpa +)
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', ALLOW_ORIGIN);

@@ -13,7 +13,7 @@ try {
 }
 const API_BASE_FALLBACK = "https://putristore-backend.vercel.app";
 const apiBase = CONFIG_API_BASE || API_BASE_FALLBACK;
-
+const WHATSAPP_GROUP_URL = "https://chat.whatsapp.com/Gpl3XMxuiVTGHbyEkaEoz6"; // link grup kamu
 export default function LuxuryOrderFlow() {
   // --- FORM STATES ---
   const [serviceId, setServiceId] = useState("");
@@ -157,18 +157,9 @@ async function handleCheckout(e) {
             </label>
 
             <div className="flex gap-3 mt-4">
-              <button
-                onClick={() => (window.location.href = receipt.wa_link)}
-                className="px-4 py-3 rounded-xl text-white bg-[#25D366]"
-              >
-                Lanjutkan ke WhatsApp
-              </button>
-              <button
-                onClick={() => setReceipt(null)}
-                className="px-4 py-3 rounded-xl border border-white/10"
-              >
-                Ubah Data
-              </button>
+              <button onClick={() => window.open(WHATSAPP_GROUP_URL, "_blank")}>
+  Lanjutkan ke Grup WhatsApp
+</button>
             </div>
 
             <p className="text-xs text-zinc-400 mt-3">

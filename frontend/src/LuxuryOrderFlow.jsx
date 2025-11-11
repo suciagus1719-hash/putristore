@@ -1,5 +1,6 @@
 // frontend/src/LuxuryOrderFlow.jsx
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+
 
 // Pakai apiBase dari config.js jika tersedia.
 // Jika tidak ada config.js, fallback ke URL backend langsung.
@@ -21,6 +22,7 @@ export default function LuxuryOrderFlow() {
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
+  const [services, setServices] = useState([]);
 
   // --- UI/REQ STATES ---
   const [loading, setLoading] = useState(false);
@@ -31,6 +33,18 @@ export default function LuxuryOrderFlow() {
   const [receiptMessage, setReceiptMessage] = useState(
     'Silakan lakukan pembayaran sesuai instruksi. Klik "Lanjutkan ke WhatsApp" agar order dikonfirmasi admin.'
   );
+  useEffect(() => {
+    fetch(`${apiBase}/api/services`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data)) setServices(data);
+      })
+      .catch((err) => console.error("Gagal ambil services:", err));
+  }, []);
+    if (services.length === 0) {
+    console.log("Menunggu daftar layanan dari panel...");
+  }
+
 
   async function handleCheckout(e) {
     e?.preventDefault?.();
@@ -179,17 +193,25 @@ export default function LuxuryOrderFlow() {
         >
           <h2 className="text-2xl font-bold mb-2">Form Order</h2>
 
-          <label className="text-sm">
-            Service ID
-            <input
-              className="mt-1 w-full rounded-xl bg-zinc-900/60 border border-white/10 px-3 py-2 outline-none"
-              name="service_id"
-              value={serviceId}
-              onChange={(e) => setServiceId(e.target.value)}
-              required
-              placeholder="mis. 1234"
-            />
-          </label>
+         <label className="text-sm">
+  Pilih Layanan
+  <select
+    className="mt-1 w-full rounded-xl bg-zinc-900/60 border border-white/10 px-3 py-2 outline-none"
+    name="service_id"
+    value={serviceId}
+    onChange={(e) => setServiceId(e.target.value)}
+    required
+  >
+    <option value="">-- Pilih Layanan --</option>
+    {services.map((srv) => (
+      <option key={srv.provider_service_id} value={srv.provider_service_id}>
+        {srv.name} ({srv.category})
+      </option>
+    ))}
+  </select>
+</label>
+
+
 
           <label className="text-sm">
             Quantity

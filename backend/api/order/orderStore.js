@@ -1,27 +1,51 @@
 // backend/api/order/orderStore.js
-/**
- * Penyimpanan order sederhana menggunakan Map di memori.
- * Cocok untuk serverless Vercel karena tiap instance punya memori sendiri.
- * Untuk produksi sebaiknya ganti ke database permanen.
- */
+const { kv } = require("@vercel/kv");
+
 const STORE_KEY = "__putristore_orders";
+const memStore = globalThis[STORE_KEY] || new Map();
+globalThis[STORE_KEY] = memStore;
 
-const orders = globalThis[STORE_KEY] || new Map();
-globalThis[STORE_KEY] = orders;
+const hasKV =
+  Boolean(process.env.KV_REST_API_URL || process.env.KV_URL || process.env.REDIS_URL) &&
+  typeof kv?.set === "function";
 
-function saveOrder(order) {
+async function persist(order) {
+  if (!hasKV || !order?.order_id) return;
+  try {
+    await kv.set(`order:${order.order_id}`, order, { ex: 60 * 60 * 24 * 30 }); // 30 hari
+  } catch (err) {
+    console.warn("kv.set gagal:", err.message);
+  }
+}
+
+async function fetchFromKV(orderId) {
+  if (!hasKV || !orderId) return null;
+  try {
+    const raw = await kv.get(`order:${orderId}`);
+    if (!raw) return null;
+    const order = typeof raw === "string" ? JSON.parse(raw) : raw;
+    memStore.set(orderId, order);
+    return order;
+  } catch (err) {
+    console.warn("kv.get gagal:", err.message);
+    return null;
+  }
+}
+
+async function saveOrder(order) {
   if (!order || !order.order_id) return null;
-  orders.set(order.order_id, order);
+  memStore.set(order.order_id, order);
+  await persist(order);
   return order;
 }
 
-function getOrder(orderId) {
+async function getOrder(orderId) {
   if (!orderId) return null;
-  return orders.get(orderId) || null;
+  if (memStore.has(orderId)) return memStore.get(orderId);
+  return fetchFromKV(orderId);
 }
 
 module.exports = {
   saveOrder,
   getOrder,
-  orders,
 };

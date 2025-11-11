@@ -3,15 +3,8 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const multer = require("multer");
+const applyCors = require("./cors");
 const { getOrder, saveOrder } = require("./orderStore");
-
-const ALLOW_ORIGIN = process.env.CORS_ORIGIN || "*";
-
-function setCors(res) {
-  res.setHeader("Access-Control-Allow-Origin", ALLOW_ORIGIN);
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-}
 
 const uploadDir = process.env.UPLOAD_DIR || path.join(os.tmpdir(), "putristore-bukti");
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
@@ -31,9 +24,7 @@ const upload = multer({
 });
 
 module.exports = function handler(req, res) {
-  setCors(res);
-
-  if (req.method === "OPTIONS") return res.status(204).end();
+  if (applyCors(req, res)) return;
   if (req.method !== "POST") {
     return res.status(405).json({ ok: false, message: "Use POST" });
   }
@@ -49,23 +40,27 @@ module.exports = function handler(req, res) {
       return res.status(422).json({ ok: false, message: "order_id wajib disertakan" });
     }
 
-    const order = getOrder(order_id);
-    if (!order) {
-      return res.status(404).json({ ok: false, message: "Order tidak ditemukan" });
-    }
-    if (!req.file) {
-      return res.status(400).json({ ok: false, message: "File bukti wajib diupload" });
-    }
+    getOrder(order_id)
+      .then((order) => {
+        if (!order) {
+          return res.status(404).json({ ok: false, message: "Order tidak ditemukan" });
+        }
+        if (!req.file) {
+          return res.status(400).json({ ok: false, message: "File bukti wajib diupload" });
+        }
 
-    order.payment = order.payment || {};
-    order.payment.proof_filename = req.file.filename;
-    order.payment.proof_url = `/uploads/bukti/${req.file.filename}`;
-    order.payment.uploaded_at = new Date().toISOString();
-    order.status = "waiting_review";
-    order.updated_at = new Date().toISOString();
+        order.payment = order.payment || {};
+        order.payment.proof_filename = req.file.filename;
+        order.payment.proof_url = `/uploads/bukti/${req.file.filename}`;
+        order.payment.uploaded_at = new Date().toISOString();
+        order.status = "waiting_review";
+        order.updated_at = new Date().toISOString();
 
-    saveOrder(order);
-
-    return res.status(200).json({ ok: true, order });
+        return saveOrder(order).then(() => res.status(200).json({ ok: true, order }));
+      })
+      .catch((dbErr) => {
+        console.error("upload-proof load/save error:", dbErr);
+        return res.status(500).json({ ok: false, message: "Internal error" });
+      });
   });
 };

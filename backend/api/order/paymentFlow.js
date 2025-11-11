@@ -1,31 +1,26 @@
-﻿// backend/api/order/paymentFlow.js
-const express = require("express");
+﻿const express = require("express");
 const multer = require("multer");
 const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "https://suciagus1719-hash.github.io";
 const path = require("path");
 const fs = require("fs");
 const fetch = global.fetch || require("node-fetch");
-const { kv } = require("@vercel/kv");
+let kv = null;
+try {
+  ({ kv } = require("@vercel/kv"));
+} catch (err) {
+  console.warn("@vercel/kv not available", err?.message || err);
+}
+const hasKv = Boolean(kv);
 
 const router = express.Router();
 
-
-
 router.use((req, res, next) => {
-
   res.setHeader("Access-Control-Allow-Origin", FRONTEND_ORIGIN);
-
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-
   if (req.method === "OPTIONS") return res.status(204).end();
-
   next();
-
 });
-
-
 
 // penyimpanan bukti (sementara ke folder uploads/bukti)
 const uploadDir = path.join(process.cwd(), "uploads/bukti");
@@ -38,12 +33,13 @@ const upload = multer({
 // expose folder bukti agar bisa dilihat admin (gunakan CDN/storage permanen untuk produksi)
 router.use("/uploads/bukti", express.static(uploadDir));
 
-// order store sederhana (ganti ke DB kalau perlu)
+// order store + cache bantuan
 const orders = new Map();
 
 async function cacheOrder(order) {
   if (!order?.order_id) return;
   orders.set(order.order_id, order);
+  if (!hasKv) return;
   try {
     await kv.set(`payment-flow:${order.order_id}`, JSON.stringify(order), { ex: 60 * 60 * 24 });
   } catch (err) {
@@ -54,6 +50,7 @@ async function cacheOrder(order) {
 async function loadOrder(orderId) {
   if (!orderId) return null;
   if (orders.has(orderId)) return orders.get(orderId);
+  if (!hasKv) return null;
   try {
     const raw = await kv.get(`payment-flow:${orderId}`);
     if (!raw) return null;
@@ -65,6 +62,7 @@ async function loadOrder(orderId) {
     return null;
   }
 }
+
 // helper bikin ID
 const createOrderId = () => `ORD-${Date.now().toString(36).toUpperCase()}`;
 
@@ -144,7 +142,7 @@ async function pushOrderToPanel(order) {
   }
 }
 
-// checkout â€“ hanya simpan, status pending_payment
+// checkout — hanya simpan, status pending_payment
 router.post("/order/checkout", async (req, res) => {
   const { service_id, quantity, target, customer = {} } = req.body || {};
   if (!service_id || !target || !Number.isFinite(Number(quantity)) || quantity <= 0) {
@@ -174,7 +172,7 @@ router.post("/order/checkout", async (req, res) => {
 // pilih metode bayar + nominal
 router.post("/order/payment-method", async (req, res) => {
   const { order_id, method, amount } = req.body || {};
-  const order = await loadOrder(order_id);
+  const order = (await loadOrder(order_id)) || orders.get(order_id);
   if (!order) return res.status(404).json({ ok: false, message: "Order tidak ditemukan" });
   order.payment.method = method;
   order.payment.amount = Number(amount);
@@ -186,7 +184,7 @@ router.post("/order/payment-method", async (req, res) => {
 // upload bukti transfer
 router.post("/order/upload-proof", upload.single("proof"), async (req, res) => {
   const { order_id } = req.body || {};
-  const order = await loadOrder(order_id);
+  const order = (await loadOrder(order_id)) || orders.get(order_id);
   if (!order) return res.status(404).json({ ok: false, message: "Order tidak ditemukan" });
   if (!req.file) return res.status(400).json({ ok: false, message: "Bukti wajib diupload" });
 
@@ -214,7 +212,7 @@ router.get("/admin/orders", (_, res) => {
 
 // admin: update status
 router.post("/admin/orders/:orderId/status", async (req, res) => {
-  const order = await loadOrder(req.params.orderId);
+  const order = (await loadOrder(req.params.orderId)) || orders.get(req.params.orderId);
   if (!order) return res.status(404).json({ ok: false, message: "Tidak ada" });
   const nextStatus = req.body.status || order.status;
   order.admin_note = req.body.admin_note || null;
@@ -238,7 +236,3 @@ router.post("/admin/orders/:orderId/status", async (req, res) => {
 });
 
 module.exports = router;
-
-
-
-

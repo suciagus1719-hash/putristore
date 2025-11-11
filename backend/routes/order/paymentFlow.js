@@ -4,6 +4,7 @@ const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "https://suciagus1719-has
 const path = require("path");
 const fs = require("fs");
 const fetch = global.fetch || require("node-fetch");
+const { saveOrder, getOrder, listOrders } = require("./orderStore");
 
 const router = express.Router();
 
@@ -26,22 +27,22 @@ const upload = multer({
 // expose folder bukti agar bisa dilihat admin (gunakan CDN/storage permanen untuk produksi)
 router.use("/uploads/bukti", express.static(uploadDir));
 
-// order store + cache bantuan
-const orders = globalThis.__paymentFlowOrders || new Map();
-globalThis.__paymentFlowOrders = orders;
-
 async function cacheOrder(order) {
   if (!order?.order_id) return;
-  orders.set(order.order_id, order);
+  await saveOrder(order);
 }
 
 async function loadOrder(orderId) {
   if (!orderId) return null;
-  return orders.get(orderId) || null;
+  return getOrder(orderId);
 }
 
 // helper bikin ID
 const createOrderId = () => `ORD-${Date.now().toString(36).toUpperCase()}`;
+const toNum = (v) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+};
 
 // Env panel
 const PANEL_API_URL =
@@ -149,7 +150,7 @@ router.post("/order/checkout", async (req, res) => {
 // pilih metode bayar + nominal
 router.post("/order/payment-method", async (req, res) => {
   const { order_id, method, amount } = req.body || {};
-  const order = (await loadOrder(order_id)) || orders.get(order_id);
+  const order = await loadOrder(order_id);
   if (!order) return res.status(404).json({ ok: false, message: "Order tidak ditemukan" });
   order.payment.method = method;
   order.payment.amount = Number(amount);
@@ -161,7 +162,7 @@ router.post("/order/payment-method", async (req, res) => {
 // upload bukti transfer
 router.post("/order/upload-proof", upload.single("proof"), async (req, res) => {
   const { order_id } = req.body || {};
-  const order = (await loadOrder(order_id)) || orders.get(order_id);
+  const order = await loadOrder(order_id);
   if (!order) return res.status(404).json({ ok: false, message: "Order tidak ditemukan" });
   if (!req.file) return res.status(400).json({ ok: false, message: "Bukti wajib diupload" });
 
@@ -183,13 +184,13 @@ router.use("/admin", (req, res, next) => {
 });
 
 // admin: list order
-router.get("/admin/orders", (_, res) => {
-  return res.json(Array.from(orders.values()));
+router.get("/admin/orders", async (_, res) => {
+  return res.json(await listOrders());
 });
 
 // admin: update status
 router.post("/admin/orders/:orderId/status", async (req, res) => {
-  const order = (await loadOrder(req.params.orderId)) || orders.get(req.params.orderId);
+  const order = await loadOrder(req.params.orderId);
   if (!order) return res.status(404).json({ ok: false, message: "Tidak ada" });
   const nextStatus = req.body.status || order.status;
   order.admin_note = req.body.admin_note || null;
@@ -210,6 +211,89 @@ router.post("/admin/orders/:orderId/status", async (req, res) => {
   await cacheOrder(order);
 
   return res.json({ ok: true, order });
+});
+
+router.get("/order/status", async (req, res) => {
+  try {
+    const order_id = String(req.query.order_id || "").trim();
+    if (!order_id) return res.status(400).json({ message: "order_id diperlukan" });
+    if (!PANEL_KEY || !PANEL_SECRET) {
+      return res.status(500).json({ message: "ENV SMMPANEL_API_KEY / SECRET belum diset" });
+    }
+
+    const basePayload = {
+      api_key: PANEL_KEY,
+      secret_key: PANEL_SECRET,
+      action: "status",
+      id: order_id,
+    };
+
+    const tryCall = async (headers, body) => {
+      const resp = await fetch(PANEL_API_URL, {
+        method: "POST",
+        headers,
+        body,
+      });
+      const text = await resp.text();
+      let json;
+      try {
+        json = JSON.parse(text);
+      } catch {
+        json = null;
+      }
+      return { resp, json, raw: text };
+    };
+
+    let { resp, json, raw } = await tryCall(
+      {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Accept: "application/json",
+      },
+      new URLSearchParams(basePayload)
+    );
+
+    const looksIdMissing = String(raw || "").toLowerCase().includes("id required");
+    if (!resp.ok || !json || json.status !== true || looksIdMissing) {
+      ({ resp, json, raw } = await tryCall(
+        {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        JSON.stringify({ ...basePayload, id: Number(order_id) })
+      ));
+    }
+
+    if (!json || json.status !== true) {
+      return res.status(502).json({
+        message: json?.data?.msg || json?.error || "Gagal mengambil status",
+        raw: json || raw,
+      });
+    }
+
+    const data = json.data || {};
+    const panelStatus = {
+      order_id,
+      status: data.status ?? "unknown",
+      start_count: toNum(data.start_count),
+      remains: toNum(data.remains ?? data.remain),
+      charge: toNum(data.charge ?? data.price ?? data.harga),
+    };
+
+    const local = (await loadOrder(order_id)) || null;
+
+    res.json({
+      ...panelStatus,
+      target: local?.target ?? null,
+      service_name: local?.service_name ?? null,
+      quantity: local?.quantity ?? null,
+      provider_order_id: local?.provider_order_id ?? null,
+      created_at: local?.created_at ?? null,
+      payment: local?.payment ?? null,
+    });
+  } catch (err) {
+    console.error("status error:", err);
+    res.status(500).json({ message: String(err?.message || err) });
+  }
 });
 
 module.exports = router;

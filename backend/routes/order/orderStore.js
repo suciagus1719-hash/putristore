@@ -45,7 +45,12 @@ async function getOrder(orderId) {
   return fetchFromKV(orderId);
 }
 
+async function listOrders() {
+  return Array.from(memStore.values());
+}
+
 module.exports = {
   saveOrder,
   getOrder,
+  listOrders,
 };

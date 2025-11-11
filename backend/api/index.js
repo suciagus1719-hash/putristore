@@ -8,7 +8,7 @@ const serverless = require("serverless-http");
 const crypto = require("crypto");
 const fetch = global.fetch || require("node-fetch");
 const { kv } = require("@vercel/kv");
-const paymentFlow = require("./order/paymentFlow");
+const paymentFlow = require("../routes/order/paymentFlow");
 
 const app = express();
 app.use(express.json({ limit: "200kb" }));

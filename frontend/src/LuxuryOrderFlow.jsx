@@ -49,28 +49,28 @@ export default function LuxuryOrderFlow() {
 async function handleCheckout(e) {
   e?.preventDefault?.();
   setError("");
+
+  const trimmedServiceId = serviceId.trim();
+  const trimmedTarget = target.trim();
+  const numericQty = Number(quantity);
+
+  if (!trimmedServiceId || !trimmedTarget || !Number.isFinite(numericQty) || numericQty <= 0) {
+    setError("Pilih layanan, isi target, dan jumlah minimal 1.");
+    return;
+  }
+
   setLoading(true);
 
   try {
-    const trimmedServiceId = (serviceId || "").trim();
-    const trimmedTarget    = (target || "").trim();
-    const qty              = Number(quantity);
-
-    if (!trimmedServiceId || !trimmedTarget || !Number.isFinite(qty) || qty <= 0) {
-      setError("Pilih layanan, isi target, dan jumlah minimal 1.");
-      setLoading(false);
-      return;
-    }
-
     const payload = {
       service_id: trimmedServiceId,
-      quantity: qty,
+      quantity: numericQty,
       target: trimmedTarget,
-      link: trimmedTarget, // supaya backend lama tetap paham
+      link: trimmedTarget, // untuk backend lama yang masih butuh 'link'
       customer: {
-        name:  customerName?.trim()  || undefined,
-        phone: customerPhone?.trim() || undefined,
-        email: customerEmail?.trim() || undefined,
+        name: customerName.trim() || undefined,
+        phone: customerPhone.trim() || undefined,
+        email: customerEmail.trim() || undefined,
       },
     };
 
@@ -79,6 +79,9 @@ async function handleCheckout(e) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
+
+    // ...lanjutan kode sama seperti sebelumnya
+
 
     const text = await r.text();
     const j = (() => { try { return JSON.parse(text); } catch { return { ok:false, message:text }; } })();

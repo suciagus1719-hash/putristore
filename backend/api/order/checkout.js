@@ -34,9 +34,25 @@ module.exports = async function handler(req, res) {
     const body = safeJson(req.body);
     const { service_id, quantity, link, customer = {} } = body;
 
-    if (!service_id || !quantity || !link) {
-      return res.status(422).json({ ok: false, message: 'service_id, link, quantity diperlukan' });
-    }
+  // === VALIDASI WAJIB ===
+if (!service_id) {
+  return res.status(422).json({ ok: false, message: "service_id wajib diisi" });
+}
+
+// pastikan quantity angka valid
+const qty = Number(quantity);
+if (!Number.isFinite(qty) || qty <= 0) {
+  return res.status(422).json({ ok: false, message: "quantity harus berupa angka > 0" });
+}
+
+// pastikan link bukan kosong & berbentuk URL (http/https)
+try {
+  const u = new URL(String(link));
+  if (!/^https?:$/.test(u.protocol)) throw new Error();
+} catch {
+  return res.status(422).json({ ok: false, message: "link harus URL valid (mis. https://...)" });
+}
+
 
     const order_id = genOrderId();
 

@@ -63,11 +63,13 @@ async function handleCheckout(e) {
 
   try {
     const payload = {
-      service_id: trimmedServiceId,
-      quantity: numericQty,
-      target: trimmedTarget,
-      link: trimmedTarget, // untuk backend lama yang masih butuh 'link'
-      customer: {
+  service_id: provider_service_id,      // wajib untuk backend
+  provider_service_id,                  // kalau masih dibutuhkan UI lain
+  target: link,                         // ganti nama 'link' jadi 'target' atau kirim dua-duanya
+  link,
+  quantity,
+  customer: { 
+
         name: customerName.trim() || undefined,
         phone: customerPhone.trim() || undefined,
         email: customerEmail.trim() || undefined,

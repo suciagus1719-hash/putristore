@@ -137,7 +137,10 @@ const INSTAGRAM_CATEGORY_ORDER = [
 
 const shouldHideCategory = (value = "") => {
   const lower = String(value).toLowerCase();
-  return lower && EXCLUDED_CATEGORY_KEYWORDS.some((kw) => lower.includes(kw));
+  if (!lower) return false;
+  if (EXCLUDED_CATEGORY_KEYWORDS.some((kw) => lower.includes(kw))) return true;
+  if (FALLBACK_CATEGORIES.some((fallback) => fallback.toLowerCase() === lower)) return true;
+  return false;
 };
 
 const guessPlatform = (s = "") => {

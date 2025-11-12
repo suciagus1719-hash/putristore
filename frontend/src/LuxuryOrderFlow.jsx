@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import AnimatedBillboardBackground from "./components/AnimatedBillboardBackground";
+import BillboardBanner from "./components/BillboardBanner";
 import {
   Instagram,
   Music2,
@@ -648,8 +648,11 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
   };
 
   return (
-    <AnimatedBillboardBackground>
-      <div className="min-h-[100svh] text-white" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+    <div
+      className="min-h-[100svh] bg-gradient-to-b from-[#1d0b2d] via-[#37106b] to-[#090213] text-white"
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
       {loading && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur">
           <div className="animate-spin rounded-full h-16 w-16 border-4 border-white border-t-transparent" />
@@ -696,6 +699,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
       </aside>
 
       <main className="max-w-5xl mx-auto px-4 py-12 space-y-6">
+        <BillboardBanner />
         <header className="mb-8">
           <div className="pointer-events-none fixed top-4 right-4 z-30 flex items-center gap-3">
             <button className="pointer-events-auto text-sm font-semibold px-4 py-1.5 rounded-full border border-white/30 text-white/80 hover:border-white hover:text-white transition">

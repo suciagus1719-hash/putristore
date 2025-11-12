@@ -91,6 +91,25 @@ const createEmptyCustomer = () => ({ name: "", phone: "", email: "" });
 const EXCLUDED_SERVICE_KEYWORDS = ["website traffic"];
 const EXCLUDED_CATEGORY_KEYWORDS = ["website traffic", "traffic", "visitor", "visit"];
 const EXCLUDED_PLATFORM_NAMES = ["Website Traffic", "Website Visitor", "Traffic"];
+const INSTAGRAM_CATEGORY_ORDER = [
+  "Instagram - Channel Members",
+  "Instagram - Comments [ Custom ]",
+  "Instagram - Comments [ Indonesia ]",
+  "Instagram - Comments [ Random ]",
+  "Instagram - Comments [ Likes ]",
+  "Instagram - Followers [ Guaranteed ]",
+  "Instagram - Likes [ Photo ]",
+  "Instagram - Likes [ Video / IGTV / Reels ]",
+  "Instagram - Live Stream S1",
+  "Instagram - Live Stream S2",
+  "Instagram - Live Stream S3",
+  "Instagram - Saves",
+  "Instagram - Shares",
+  "Instagram - Story [ Quiz / Poll ]",
+  "Instagram - Story [ Views ]",
+  "Instagram - Views [ Video / IGTV / Reels ]",
+  "Instagram - Views [ Indonesia ]",
+];
 
 const shouldHideCategory = (value = "") => {
   const lower = String(value).toLowerCase();
@@ -205,14 +224,22 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
           if (!shouldHideCategory(cat)) normalized.add(cat);
         }
       });
-      return Array.from(normalized)
+      let baseList = Array.from(normalized)
         .map((cat) => cat.trim())
         .filter((cat) => {
           if (!cat) return false;
-          const lower = cat.toLowerCase();
           if (shouldHideCategory(cat)) return false;
+          const lower = cat.toLowerCase();
           return !FALLBACK_CATEGORIES.some((fallback) => fallback.toLowerCase() === lower);
         });
+
+      const alphabetical = [...baseList].sort((a, b) => a.localeCompare(b));
+      if (platform === "Instagram") {
+        const priorityAvailable = INSTAGRAM_CATEGORY_ORDER.filter((cat) => alphabetical.includes(cat));
+        const remaining = alphabetical.filter((cat) => !priorityAvailable.includes(cat));
+        return [...priorityAvailable, ...remaining];
+      }
+      return alphabetical;
     },
     [allServices]
   );
@@ -242,9 +269,17 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
       return;
     }
     const applyCategories = (list = []) => {
-      const filtered = list.filter((item) => item && !shouldHideCategory(item));
-      setCategories(filtered);
-      setSelectedCategory((prev) => (filtered.includes(prev) ? prev : filtered[0] || ""));
+      const filtered = list
+        .map((item) => String(item || "").trim())
+        .filter((item) => item && !shouldHideCategory(item));
+      const sorted = selectedPlatform === "Instagram"
+        ? [
+            ...INSTAGRAM_CATEGORY_ORDER.filter((cat) => filtered.includes(cat)),
+            ...filtered.filter((cat) => !INSTAGRAM_CATEGORY_ORDER.includes(cat)).sort((a, b) => a.localeCompare(b)),
+          ]
+        : filtered.sort((a, b) => a.localeCompare(b));
+      setCategories(sorted);
+      setSelectedCategory((prev) => (sorted.includes(prev) ? prev : sorted[0] || ""));
     };
 
     const platformChanged = prevPlatformRef.current !== selectedPlatform;

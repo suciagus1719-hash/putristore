@@ -90,6 +90,7 @@ const DEFAULT_QUANTITY = 100;
 const createEmptyCustomer = () => ({ name: "", phone: "", email: "" });
 const EXCLUDED_SERVICE_KEYWORDS = ["website traffic"];
 const EXCLUDED_CATEGORY_KEYWORDS = ["website traffic", "traffic", "visitor", "visit"];
+const EXCLUDED_PLATFORM_NAMES = ["Website Traffic", "Website Visitor", "Traffic"];
 
 const guessPlatform = (s = "") => {
   const n = String(s).toLowerCase();
@@ -150,6 +151,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
       .filter((cat) => {
         if (!cat) return false;
         const lower = cat.toLowerCase();
+        if (EXCLUDED_CATEGORY_KEYWORDS.some((kw) => lower.includes(kw))) return false;
         return !FALLBACK_CATEGORIES.some((fallback) => fallback.toLowerCase() === lower);
       });
   }, [categories]);
@@ -227,6 +229,12 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
 
   useEffect(() => {
     if (!selectedPlatform) return;
+    const platformLabel = selectedPlatform.toLowerCase();
+    if (EXCLUDED_PLATFORM_NAMES.some((kw) => platformLabel.includes(kw.toLowerCase()))) {
+      setCategories([]);
+      setSelectedCategory("");
+      return;
+    }
     const applyCategories = (list = []) => {
       setCategories(list);
       setSelectedCategory((prev) => (list.includes(prev) ? prev : list[0] || ""));

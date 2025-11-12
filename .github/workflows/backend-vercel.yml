@@ -1,0 +1,64 @@
+name: Backend - Deploy to Vercel
+
+on:
+  push:
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-vercel.yml"
+      - "package.json"
+      - "package-lock.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: vercel-production
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+          cache-dependency-path: package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm install
+
+      - name: Pull Vercel environment info
+        if: env.VERCEL_TOKEN != ''
+        working-directory: backend
+        run: npx vercel pull --yes --environment=production --token "${VERCEL_TOKEN}"
+
+      - name: Build backend (prebuilt)
+        if: env.VERCEL_TOKEN != ''
+        working-directory: backend
+        run: npx vercel build --prod --token "${VERCEL_TOKEN}"
+
+      - name: Deploy to Vercel
+        id: deploy
+        if: env.VERCEL_TOKEN != ''
+        working-directory: backend
+        run: |
+          npx vercel deploy --prebuilt --prod --token "${VERCEL_TOKEN}" > deploy.log
+          cat deploy.log
+          url=$(grep -o 'https://[^ ]*' deploy.log | tail -n 1)
+          echo "url=${url}" >> "$GITHUB_OUTPUT"
+
+      - name: Skip notice
+        if: env.VERCEL_TOKEN == ''
+        run: |
+          echo "VERCEL_TOKEN/ORG_ID/PROJECT_ID secrets are missing. Add them in repository settings to enable automatic deploys."

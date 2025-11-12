@@ -1,28 +1,23 @@
-export default function handler(req, res) {
-  res.status(200).send('Backend OK');
-}
 // api/index.js
-// Express app dibungkus serverless sehingga cocok untuk Vercel
+// Express app dibungkus serverless secara manual (app(req,res))
 const express = require("express");
-const serverless = require("serverless-http");
 const crypto = require("crypto");
 const fetch = global.fetch || require("node-fetch");
 const { kv } = require("@vercel/kv");
 const paymentFlow = require("../routes/order/paymentFlow");
+const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "https://suciagus1719-hash.github.io";
 
 const app = express();
-app.use(express.json({ limit: "200kb" }));
-app.use("/api", paymentFlow);
-
-// CORS middleware (sesuaikan FRONTEND_ORIGIN di env untuk production)
+// Pastikan CORS ditangani sebelum middleware lain agar preflight OPTIONS selalu sukses
 app.use((req, res, next) => {
-  const ORIGIN = process.env.FRONTEND_ORIGIN || "https://suciagus1719-hash.github.io";
-  res.setHeader("Access-Control-Allow-Origin", ORIGIN);
+  res.setHeader("Access-Control-Allow-Origin", FRONTEND_ORIGIN);
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Accept, Authorization");
   if (req.method === "OPTIONS") return res.sendStatus(204);
   next();
 });
+app.use(express.json({ limit: "200kb" }));
+app.use(paymentFlow);
 
 // Helper untuk simpan/get order meta di KV
 async function saveOrderMeta(meta) {
@@ -59,9 +54,10 @@ function toNum(v) {
   return Number.isFinite(n) ? n : null;
 }
 
-// Route: /api/order/checkout
+// Route: /api/order/checkout  (dukungan ganda: "/api/..." & "/...")
 // Expect body: { service_id, link, quantity, service_name, charge, name, email, phone }
-app.post("/api/order/checkout", async (req, res) => {
+const checkoutPaths = ["/api/order/checkout", "/order/checkout"];
+app.post(checkoutPaths, async (req, res) => {
   try {
     // 1) validate input
     const {
@@ -217,6 +213,8 @@ app.post("/api/order/checkout", async (req, res) => {
   }
 });
 
-// Expose the app as serverless handler
-module.exports = app;
-module.exports.handler = serverless(app);
+// Expose the app as handler untuk Vercel
+const handler = (req, res) => app(req, res);
+module.exports = handler;
+module.exports.handler = handler;
+module.exports.app = app;

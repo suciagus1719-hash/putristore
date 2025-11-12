@@ -33,9 +33,9 @@ export default function AnimatedBillboardBackground({ children }) {
   return (
     <div className="relative min-h-[100svh] overflow-hidden">
       <div
-        className={bsolute inset-0 }
+        className={`absolute inset-0 ${current ? "animate-pan" : ""}`}
         style={{
-          backgroundImage: current ? url() : undefined,
+          backgroundImage: current ? `url(${current})` : undefined,
           backgroundSize: "cover",
           backgroundRepeat: "repeat-x",
           backgroundPosition: "center",

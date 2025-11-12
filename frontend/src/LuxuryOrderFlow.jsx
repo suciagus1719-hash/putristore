@@ -26,6 +26,16 @@ import {
   Film,
   MessageSquare,
   Gamepad2,
+  Twitter,
+  Twitch,
+  Cloud,
+  Linkedin,
+  Play,
+  BookOpen,
+  Pin,
+  Share,
+  PlayCircle,
+  Disc,
 } from "lucide-react";
 
 const WHATSAPP_GROUP_LINK = "https://chat.whatsapp.com/link-grup-kamu";
@@ -50,6 +60,19 @@ const PLATFORM_CARDS = [
   { key: "Spotify", label: "Spotify", accent: "from-green-500 to-emerald-600", icon: Music },
   { key: "Discord", label: "Discord", accent: "from-indigo-500 to-purple-600", icon: Gamepad2 },
   { key: "Snack Video", label: "Snack Video", accent: "from-yellow-400 to-orange-500", icon: Film },
+  { key: "Twitter", label: "Twitter / X", accent: "from-sky-400 to-blue-500", icon: Twitter },
+  { key: "Twitch", label: "Twitch", accent: "from-purple-600 to-indigo-600", icon: Twitch },
+  { key: "SoundCloud", label: "SoundCloud", accent: "from-orange-500 to-red-500", icon: Cloud },
+  { key: "Reddit", label: "Reddit", accent: "from-orange-400 to-pink-500", icon: Share },
+  { key: "Quora", label: "Quora", accent: "from-rose-500 to-red-600", icon: BookOpen },
+  { key: "Pinterest", label: "Pinterest", accent: "from-red-500 to-rose-500", icon: Pin },
+  { key: "Mobile App", label: "Mobile App Install", accent: "from-slate-700 to-slate-900", icon: Download },
+  { key: "Kwai", label: "Kwai", accent: "from-amber-400 to-orange-500", icon: Film },
+  { key: "LinkedIn", label: "LinkedIn", accent: "from-blue-500 to-blue-700", icon: Linkedin },
+  { key: "Likee", label: "Likee", accent: "from-pink-500 via-orange-400 to-yellow-400", icon: Heart },
+  { key: "Google Play", label: "Google Play Review", accent: "from-green-400 to-blue-500", icon: Play },
+  { key: "Dailymotion", label: "Dailymotion", accent: "from-indigo-500 to-blue-700", icon: PlayCircle },
+  { key: "Audiomack", label: "Audiomack", accent: "from-yellow-400 to-red-500", icon: Disc },
 ];
 
 const getPlatformIcon = (platform) =>
@@ -128,8 +151,20 @@ const guessPlatform = (s = "") => {
   if (n.includes("youtube")) return "YouTube";
   if (n.includes("facebook")) return "Facebook";
   if (n.includes("telegram")) return "Telegram";
-  if (n.includes("twitter") || n.includes(" x ")) return "Twitter/X";
+  if (n.includes("twitter") || n.includes(" x ")) return "Twitter";
   if (n.includes("shopee") || n.includes("tokopedia") || n.includes("bukalapak")) return "Shopee";
+  if (n.includes("twitch")) return "Twitch";
+  if (n.includes("soundcloud")) return "SoundCloud";
+  if (n.includes("reddit")) return "Reddit";
+  if (n.includes("quora")) return "Quora";
+  if (n.includes("pinterest")) return "Pinterest";
+  if (n.includes("mobile app") || n.includes("app install")) return "Mobile App";
+  if (n.includes("kwai")) return "Kwai";
+  if (n.includes("linkedin")) return "LinkedIn";
+  if (n.includes("likee")) return "Likee";
+  if (n.includes("google play") || n.includes("playstore") || n.includes("play store")) return "Google Play";
+  if (n.includes("dailymotion")) return "Dailymotion";
+  if (n.includes("audiomack")) return "Audiomack";
   return "Other";
 };
 

@@ -268,16 +268,21 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
       setSelectedCategory("");
       return;
     }
+    const derivedList = deriveCategories(selectedPlatform);
     const applyCategories = (list = []) => {
-      const filtered = list
+      const merged = [...new Set([...(derivedList || []), ...list])];
+      const filtered = merged
         .map((item) => String(item || "").trim())
         .filter((item) => item && !shouldHideCategory(item));
-      const sorted = selectedPlatform === "Instagram"
-        ? [
-            ...INSTAGRAM_CATEGORY_ORDER.filter((cat) => filtered.includes(cat)),
-            ...filtered.filter((cat) => !INSTAGRAM_CATEGORY_ORDER.includes(cat)).sort((a, b) => a.localeCompare(b)),
-          ]
-        : filtered.sort((a, b) => a.localeCompare(b));
+      const sorted =
+        selectedPlatform === "Instagram"
+          ? [
+              ...INSTAGRAM_CATEGORY_ORDER.filter((cat) => filtered.includes(cat)),
+              ...filtered
+                .filter((cat) => !INSTAGRAM_CATEGORY_ORDER.includes(cat))
+                .sort((a, b) => a.localeCompare(b)),
+            ]
+          : filtered.sort((a, b) => a.localeCompare(b));
       setCategories(sorted);
       setSelectedCategory((prev) => (sorted.includes(prev) ? prev : sorted[0] || ""));
     };
@@ -288,9 +293,8 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
       resetOrderInputs();
     }
 
-    const derived = deriveCategories(selectedPlatform);
-    if (derived.length) {
-      applyCategories(derived);
+    if (derivedList.length) {
+      applyCategories(derivedList);
     } else if (!categoryCache.current[selectedPlatform]) {
       applyCategories([]);
     }

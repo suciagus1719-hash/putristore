@@ -134,6 +134,9 @@ const INSTAGRAM_CATEGORY_ORDER = [
   "Instagram - Views [ Video / IGTV / Reels ]",
   "Instagram - Views [ Indonesia ]",
 ];
+const PRICE_MARKUP = Number(import.meta.env?.VITE_PRICE_MARKUP ?? 0.05);
+const MARKUP_FACTOR = 1 + PRICE_MARKUP;
+const applyMarkup = (base) => Math.max(base * MARKUP_FACTOR, 0);
 
 const shouldHideCategory = (value = "") => {
   const lower = String(value).toLowerCase();
@@ -411,7 +414,8 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
     if (!selectedService) return 0;
     const rate = Number(selectedService.rate_per_1k) || 0;
     const qty = Number(quantity) || 0;
-    return Math.max((rate / 1000) * qty, 0);
+    const base = (rate / 1000) * qty;
+    return applyMarkup(base);
   }, [selectedService, quantity]);
 
   const request = async (path, opts = {}) => {
@@ -501,7 +505,8 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
     setQuantity(min);
     setTarget("");
     setCustomer(createEmptyCustomer());
-    setPayment((prev) => ({ ...prev, amount: (Number(srv.rate_per_1k) / 1000) * min }));
+    const base = (Number(srv.rate_per_1k) / 1000) * min;
+    setPayment((prev) => ({ ...prev, amount: applyMarkup(base) }));
     setProof(null);
     setOrder(null);
     setOrderTimestamp(null);
@@ -826,9 +831,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
                   />
                   <p className="text-xs text-white/60">
                     Estimasi harga:{" "}
-                    <span className="font-semibold text-white">
-                      {formatIDR(Math.max((Number(selectedService.rate_per_1k) || 0) / 1000 * (quantity || (selectedService.min || 1)), 0))}
-                    </span>
+                    <span className="font-semibold text-white">{formatIDR(pricePreview)}</span>
                   </p>
                 </label>
 

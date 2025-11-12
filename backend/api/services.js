@@ -44,6 +44,7 @@ function matchAction(cat = "", action = "") {
 
 // Normalisasi item layanan ke schema sederhana untuk FE
 function mapService(s, platform = "", action = "") {
+  const baseRate = Number(s?.price ?? s?.rate ?? s?.price_per_1000 ?? 0);
   return {
     provider_service_id:
       s?.id ?? s?.service ?? s?.service_id ?? s?.provider_service_id ?? null,
@@ -52,7 +53,7 @@ function mapService(s, platform = "", action = "") {
     min: Number(s?.min ?? s?.min_qty ?? 1),
     max: Number(s?.max ?? s?.max_qty ?? 100000),
     // Banyak panel pakai "price" atau "rate" per 1k (sering kali per 1000)
-    rate_per_1k: Number(s?.price ?? s?.rate ?? s?.price_per_1000 ?? 0),
+    rate_per_1k: baseRate,
     description: s?.note || s?.description || "",
     raw: undefined, // bisa dibuang untuk mengurangi payload; simpan kalau perlu debug
   };

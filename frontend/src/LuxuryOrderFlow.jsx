@@ -33,6 +33,8 @@ const API_FALLBACK = "https://putristore-backend.vercel.app";
 const AVATAR_URL =
   (import.meta?.env?.VITE_OWNER_AVATAR && import.meta.env.VITE_OWNER_AVATAR.trim()) ||
   "https://images.unsplash.com/photo-1504593811423-6dd665756598?auto=format&fit=crop&w=200&q=60";
+const BRAND_BADGE_URL =
+  (import.meta?.env?.VITE_BRAND_BADGE && import.meta.env.VITE_BRAND_BADGE.trim()) || AVATAR_URL;
 const QRIS_IMAGE_URL = "https://i.imgur.com/lQjQpMZ.png"; // ganti dengan QRIS asli
 
 const PLATFORM_CARDS = [
@@ -578,8 +580,8 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
       </aside>
 
       <main className="max-w-5xl mx-auto px-4 py-12 space-y-6">
-        <header className="mb-8 flex items-center justify-between">
-          <div>
+        <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="space-y-2">
             <p className="text-sm uppercase tracking-[0.3em] text-white/60">Premium Flow</p>
             <h1 className="text-4xl font-extrabold">Luxury Order Experience</h1>
             <p className="text-white/70 max-w-2xl">
@@ -587,11 +589,15 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
               lengkap dengan monitoring admin.
             </p>
           </div>
-          <img
-            src={AVATAR_URL}
-            alt="Avatar"
-            className="w-16 h-16 rounded-full border-2 border-white/50 object-cover shadow-lg"
-          />
+          <div className="relative">
+            <div className="rounded-full bg-gradient-to-br from-purple-500/60 to-indigo-500/60 p-1 shadow-2xl shadow-purple-900/40">
+              <img
+                src={BRAND_BADGE_URL}
+                alt="Brand Badge"
+                className="w-12 h-12 sm:w-14 sm:h-14 rounded-full border border-white/40 object-contain bg-white/10 backdrop-blur"
+              />
+            </div>
+          </div>
         </header>
 
         {error && (
@@ -606,24 +612,21 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
             className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur p-6 space-y-6"
           >
             {renderStepTitle("1", "Pilih Platform & Layanan")}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
               {PLATFORM_CARDS.map((card) => (
                 <button
                   key={card.key}
                   type="button"
                   onClick={() => setSelectedPlatform(card.key)}
                   aria-pressed={selectedPlatform === card.key}
-                  className={`rounded-xl border px-3 py-3 text-left transition shadow-sm flex items-center gap-2 text-sm bg-gradient-to-br ${card.accent} ${
+                  className={`rounded-lg border px-2.5 py-2 text-left transition shadow-sm flex items-center gap-2 text-xs bg-gradient-to-br ${card.accent} ${
                     selectedPlatform === card.key
                       ? "border-2 border-purple-400 ring-2 ring-purple-500/30 shadow-lg"
                       : "border border-purple-300/30 opacity-85 hover:opacity-100 hover:border-purple-300/70"
                   }`}
                 >
-                  <card.icon className="w-5 h-5" />
-                  <div>
-                    <p className="font-semibold text-sm">{card.label}</p>
-                    <p className="text-[11px] text-white/70">Tap untuk pilih</p>
-                  </div>
+                  <card.icon className="w-4 h-4" />
+                  <p className="font-semibold text-xs tracking-tight">{card.label}</p>
                 </button>
               ))}
             </div>
@@ -632,26 +635,29 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
               <p className="text-sm text-white/60">Memuat kategori?</p>
             ) : (
               selectedPlatform && (
-                <div className="flex flex-wrap gap-2">
-                  {categories.map((cat) => {
-                    const Icon = CATEGORY_ICONS[cat] || CATEGORY_ICONS.Other;
-                    return (
-                      <button
-                        key={cat}
-                        type="button"
-                        onClick={() => setSelectedCategory(cat)}
-                        aria-pressed={selectedCategory === cat}
-                        className={`px-3 py-1.5 rounded-full text-xs border flex items-center gap-2 transition ${
-                          selectedCategory === cat
-                            ? "bg-white text-purple-900 border-purple-400 shadow"
-                            : "bg-white/5 border-purple-300/30 text-white/70 hover:bg-white/10 hover:border-purple-300/60"
-                        }`}
-                      >
-                        <Icon className="w-3.5 h-3.5" />
-                        {cat}
-                      </button>
-                    );
-                  })}
+                <div className="space-y-2">
+                  <p className="text-xs uppercase tracking-wide text-white/50">Kategori Layanan</p>
+                  <div className="flex flex-wrap gap-2">
+                    {categories.map((cat) => {
+                      const Icon = CATEGORY_ICONS[cat] || CATEGORY_ICONS.Other;
+                      return (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => setSelectedCategory(cat)}
+                          aria-pressed={selectedCategory === cat}
+                          className={`px-3 py-1.5 rounded-full text-[11px] border flex items-center gap-1.5 transition ${
+                            selectedCategory === cat
+                              ? "bg-white text-purple-900 border-purple-400 shadow"
+                              : "bg-white/5 border-purple-300/30 text-white/70 hover:bg-white/10 hover:border-purple-300/60"
+                          }`}
+                        >
+                          <Icon className="w-3 h-3" />
+                          {cat}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               )
             )}
@@ -660,33 +666,41 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
               <p className="text-sm uppercase tracking-wide text-white/50">
                 Pilih layanan ({servicesLoading ? "memuat?" : `${filteredServices.length} opsi`})
               </p>
-              <div className="grid md:grid-cols-2 gap-2 max-h-[360px] overflow-y-auto pr-2">
-                {filteredServices.length === 0 && (
-                  <div className="col-span-2 text-white/60 text-sm">Tidak ada layanan.</div>
-                )}
-                {filteredServices.map((srv) => {
-                  const selected = selectedService?.provider_service_id === srv.provider_service_id;
-                  return (
-                    <button
-                      key={srv.provider_service_id}
-                      type="button"
-                      onClick={() => handleSelectService(srv)}
-                      aria-pressed={selected}
-                      className={`text-left rounded-xl border px-3 py-3 text-sm bg-white/5 hover:bg-white/10 transition ${
-                        selected
-                          ? "border-purple-400 ring-2 ring-purple-500/20 shadow-lg"
-                          : "border-white/10"
-                      }`}
-                    >
-                      <p className="text-[11px] text-white/50">ID: {srv.provider_service_id}</p>
-                      <p className="font-semibold text-base leading-snug">{srv.name}</p>
-                      <p className="text-[11px] text-white/60 mb-2">{srv.category}</p>
-                      <div className="text-xs text-white/80">
-                                              </div>
-                    </button>
-                  );
-                })}
-              </div>
+              {!selectedCategory ? (
+                <div className="rounded-xl border border-dashed border-white/20 bg-white/5 px-4 py-3 text-sm text-white/60">
+                  Pilih kategori layanan terlebih dahulu.
+                </div>
+              ) : (
+                <div className="grid md:grid-cols-2 gap-2 max-h-[320px] overflow-y-auto pr-2">
+                  {filteredServices.length === 0 && (
+                    <div className="col-span-2 text-white/60 text-sm">Tidak ada layanan.</div>
+                  )}
+                  {filteredServices.map((srv) => {
+                    const selected = selectedService?.provider_service_id === srv.provider_service_id;
+                    return (
+                      <button
+                        key={srv.provider_service_id}
+                        type="button"
+                        onClick={() => handleSelectService(srv)}
+                        aria-pressed={selected}
+                        className={`text-left rounded-lg border px-2.5 py-2 text-xs bg-white/5 hover:bg-white/10 transition ${
+                          selected
+                            ? "border-purple-400 ring-2 ring-purple-500/20 shadow-lg"
+                            : "border-white/10"
+                        }`}
+                      >
+                        <p className="text-[10px] text-white/50">ID: {srv.provider_service_id}</p>
+                        <p className="font-semibold text-sm leading-snug truncate">{srv.name}</p>
+                        <p className="text-[10px] text-white/60 mb-1">{srv.category}</p>
+                        <div className="text-[11px] text-white/80 flex justify-between">
+                          <span>Min {srv.min}</span>
+                          <span>{formatIDR(Number(srv.rate_per_1k) || 0)}</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {selectedService && (

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import BillboardBanner from "./components/BillboardBanner";
 import {
@@ -611,15 +611,43 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
         orderRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       },
     },
-    { label: "Admin", action: () => { setMenuOpen(false); navigate("/admin"); } },
-    { label: "Status Order", action: () => { setMenuOpen(false); handleStatusCheck(); } },
     {
-      label: "Monitoring Sosmed",
+      label: "Panduan",
+      action: () => {
+        setMenuOpen(false);
+        window.open("https://wa.me/6281234567890?text=Halo%20kak%2C%20minta%20panduan%20order%20dong", "_blank", "noopener");
+      },
+    },
+    {
+      label: "Informasi",
       action: () => {
         setMenuOpen(false);
         window.open("https://t.me/+monitoringsosmed", "_blank", "noopener");
       },
     },
+    {
+      label: "Daftar Harga",
+      action: () => {
+        setMenuOpen(false);
+        window.open("https://docs.google.com/spreadsheets/d/your_price_list_id", "_blank", "noopener");
+      },
+    },
+    {
+      label: "Kontak & Owner Info",
+      action: () => {
+        setMenuOpen(false);
+        window.open("https://wa.me/6281234567890?text=Halo%20Owner", "_blank", "noopener");
+      },
+    },
+    {
+      label: "Testimoni",
+      action: () => {
+        setMenuOpen(false);
+        window.open("https://instagram.com/stories/highlights/your_highlight_id", "_blank", "noopener");
+      },
+    },
+    { label: "Admin", action: () => { setMenuOpen(false); navigate("/admin"); } },
+    { label: "Status Order", action: () => { setMenuOpen(false); handleStatusCheck(); } },
   ];
 
   const resetFlow = () => {
@@ -714,11 +742,10 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
             </div>
           </div>
           <div className="space-y-2 max-w-3xl">
-            <p className="text-sm uppercase tracking-[0.3em] text-white/60">Premium Flow</p>
-            <h1 className="text-4xl font-extrabold">Luxury Order Experience</h1>
+            <p className="text-sm uppercase tracking-[0.3em] text-white/60">Putri Gmoyy Store</p>
+            <h1 className="text-4xl font-extrabold">Putri Gmoyy Sosmed</h1>
             <p className="text-white/70 max-w-2xl">
-              Pilih platform favoritmu, tentukan jenis layanan, dan nikmati proses pembayaran modern
-              lengkap dengan monitoring admin.
+              Jasa kebutuhan sosmed aman, murah dan terpercaya. Langsung saja order dibawah ini maniezz...
             </p>
           </div>
         </header>
@@ -1082,7 +1109,6 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
     </div>
   );
 }
-
 
 
 

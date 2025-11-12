@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from "react";
+import\ React,\ \{\ useCallback,\ useEffect,\ useMemo,\ useRef,\ useState\ }\ from\ "react";
 import { useNavigate } from "react-router-dom";
 import {
   Instagram,
@@ -83,6 +83,9 @@ const PAYMENT_METHODS = [
   { key: "bri", label: "Transfer BRI", icon: CreditCard },
 ];
 
+const DEFAULT_QUANTITY = 100;
+const createEmptyCustomer = () => ({ name: "", phone: "", email: "" });
+
 const guessPlatform = (s = "") => {
   const n = String(s).toLowerCase();
   if (n.includes("tiktok")) return "TikTok";
@@ -147,9 +150,9 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
   }, [categories]);
 
   const [serviceId, setServiceId] = useState("");
-  const [quantity, setQuantity] = useState(100);
+  const [quantity, setQuantity] = useState(DEFAULT_QUANTITY);
   const [target, setTarget] = useState("");
-  const [customer, setCustomer] = useState({ name: "", phone: "", email: "" });
+  const [customer, setCustomer] = useState(createEmptyCustomer);
   const [step, setStep] = useState(1);
   const [payment, setPayment] = useState({ method: "qris", amount: 0 });
   const [proof, setProof] = useState(null);
@@ -158,6 +161,44 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
   const [error, setError] = useState("");
   const [orderTimestamp, setOrderTimestamp] = useState(null);
   const [receiptImage, setReceiptImage] = useState(null);
+
+  const categoryCache = useRef({});
+  const prevPlatformRef = useRef(selectedPlatform);
+  const prevCategoryRef = useRef(selectedCategory);
+
+  const resetOrderInputs = useCallback(() => {
+    setSelectedService(null);
+    setServiceId("");
+    setQuantity(DEFAULT_QUANTITY);
+    setTarget("");
+    setCustomer(createEmptyCustomer());
+    setPayment((prev) => ({ ...prev, amount: 0 }));
+    setProof(null);
+    setOrder(null);
+    setStep(1);
+    setError("");
+  }, []);
+
+  const deriveCategories = useCallback(
+    (platform) => {
+      if (!platform || !allServices.length) return [];
+      const normalized = new Set();
+      allServices.forEach((srv) => {
+        const plat = guessPlatform(srv.name || srv.category || "");
+        if (plat === platform && srv.category) {
+          normalized.add(String(srv.category).trim());
+        }
+      });
+      return Array.from(normalized)
+        .map((cat) => cat.trim())
+        .filter(
+          (cat) =>
+            cat &&
+            !FALLBACK_CATEGORIES.some((fallback) => fallback.toLowerCase() === cat.toLowerCase())
+        );
+    },
+    [allServices]
+  );
 
   useEffect(() => {
     async function loadServices() {
@@ -177,39 +218,78 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
 
   useEffect(() => {
     if (!selectedPlatform) return;
-    async function loadCategories() {
+    const applyCategories = (list = []) => {
+      setCategories(list);
+      setSelectedCategory((prev) => (list.includes(prev) ? prev : list[0] || ""));
+    };
+
+    const platformChanged = prevPlatformRef.current !== selectedPlatform;
+    if (platformChanged) {
+      prevCategoryRef.current = "";
+      resetOrderInputs();
+    }
+
+    const derived = deriveCategories(selectedPlatform);
+    if (derived.length) {
+      applyCategories(derived);
+    } else if (!categoryCache.current[selectedPlatform]) {
+      applyCategories([]);
+    }
+
+    if (categoryCache.current[selectedPlatform]?.length) {
+      applyCategories(categoryCache.current[selectedPlatform]);
+    }
+
+    let ignore = false;
+    const controller = new AbortController();
+    setCategoryLoading(true);
+
+    (async () => {
       try {
-        setCategoryLoading(true);
         const res = await fetch(
-          `${apiBase}/api/actions?platform=${encodeURIComponent(selectedPlatform)}`
+          `${apiBase}/api/actions?platform=${encodeURIComponent(selectedPlatform)}`,
+          { signal: controller.signal }
         );
         const data = await res.json();
-        if (Array.isArray(data) && data.length) {
-          const sanitized = data
-            .map((cat) => String(cat || "").trim())
-            .filter(Boolean);
-          const refined = sanitized.filter((cat) => {
-            const lower = cat.toLowerCase();
-            return !FALLBACK_CATEGORIES.some((fallback) => fallback.toLowerCase() === lower);
-          });
-          setCategories(refined);
-          setSelectedCategory("");
-        } else {
-          setCategories([]);
-          setSelectedCategory("");
+        const sanitized = Array.isArray(data)
+          ? data
+              .map((cat) => String(cat || "").trim())
+              .filter(Boolean)
+          : [];
+        const refined = sanitized.filter((cat) => {
+          const lower = cat.toLowerCase();
+          return !FALLBACK_CATEGORIES.some((fallback) => fallback.toLowerCase() === lower);
+        });
+        if (!ignore) {
+          const result = refined.length ? refined : sanitized;
+          categoryCache.current[selectedPlatform] = result;
+          applyCategories(result);
         }
       } catch (e) {
-        console.error("Gagal memuat kategori:", e);
-        setCategories([]);
-        setSelectedCategory("");
+        if (e.name !== "AbortError") {
+          console.error("Gagal memuat kategori:", e);
+        }
       } finally {
-        setCategoryLoading(false);
-        setSelectedService(null);
-        setServiceId("");
+        if (!ignore) setCategoryLoading(false);
       }
+    })();
+
+    prevPlatformRef.current = selectedPlatform;
+    return () => {
+      ignore = true;
+      controller.abort();
+    };
+  }, [apiBase, selectedPlatform, deriveCategories, resetOrderInputs]);
+
+  useEffect(() => {
+    if (prevCategoryRef.current === selectedCategory) {
+      return;
     }
-    loadCategories();
-  }, [apiBase, selectedPlatform]);
+    if (selectedCategory) {
+      resetOrderInputs();
+    }
+    prevCategoryRef.current = selectedCategory;
+  }, [selectedCategory, resetOrderInputs]);
 
   const filteredServices = useMemo(() => {
     return allServices.filter((srv) => {
@@ -311,11 +391,19 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
   };
 
   const handleSelectService = (srv) => {
+    const min = Number(srv.min) || 1;
     setSelectedService(srv);
     setServiceId(String(srv.provider_service_id));
-    const min = Number(srv.min) || 1;
-    if (!quantity || quantity < min) setQuantity(min);
-    setPayment((prev) => ({ ...prev, amount: (Number(srv.rate_per_1k) / 1000) * (quantity || min) }));
+    setQuantity(min);
+    setTarget("");
+    setCustomer(createEmptyCustomer());
+    setPayment((prev) => ({ ...prev, amount: (Number(srv.rate_per_1k) / 1000) * min }));
+    setProof(null);
+    setOrder(null);
+    setOrderTimestamp(null);
+    setReceiptImage(null);
+    setStep(1);
+    setError("");
   };
 
   const handleStatusCheck = async () => {
@@ -518,29 +606,30 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
             className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur p-6 space-y-6"
           >
             {renderStepTitle("1", "Pilih Platform & Layanan")}
-            <div className="grid sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {PLATFORM_CARDS.map((card) => (
                 <button
                   key={card.key}
                   type="button"
                   onClick={() => setSelectedPlatform(card.key)}
-                  className={`rounded-2xl border px-4 py-4 text-left transition shadow-sm flex items-center gap-3 bg-gradient-to-br ${card.accent} ${
+                  aria-pressed={selectedPlatform === card.key}
+                  className={`rounded-xl border px-3 py-3 text-left transition shadow-sm flex items-center gap-2 text-sm bg-gradient-to-br ${card.accent} ${
                     selectedPlatform === card.key
-                      ? "border-white shadow-lg"
-                      : "border-white/10 opacity-80 hover:opacity-100"
+                      ? "border-2 border-purple-400 ring-2 ring-purple-500/30 shadow-lg"
+                      : "border border-purple-300/30 opacity-85 hover:opacity-100 hover:border-purple-300/70"
                   }`}
                 >
-                  <card.icon className="w-6 h-6" />
+                  <card.icon className="w-5 h-5" />
                   <div>
-                    <p className="font-semibold">{card.label}</p>
-                    <p className="text-xs text-white/70">Tap untuk pilih</p>
+                    <p className="font-semibold text-sm">{card.label}</p>
+                    <p className="text-[11px] text-white/70">Tap untuk pilih</p>
                   </div>
                 </button>
               ))}
             </div>
 
             {categoryLoading ? (
-              <p className="text-sm text-white/60">Memuat kategori�</p>
+              <p className="text-sm text-white/60">Memuat kategori?</p>
             ) : (
               selectedPlatform && (
                 <div className="flex flex-wrap gap-2">
@@ -551,13 +640,14 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
                         key={cat}
                         type="button"
                         onClick={() => setSelectedCategory(cat)}
-                        className={`px-4 py-2 rounded-full text-sm border flex items-center gap-2 ${
+                        aria-pressed={selectedCategory === cat}
+                        className={`px-3 py-1.5 rounded-full text-xs border flex items-center gap-2 transition ${
                           selectedCategory === cat
-                            ? "bg-white text-purple-800 border-white"
-                            : "bg-white/5 border-white/10 text-white/70 hover:bg-white/10"
+                            ? "bg-white text-purple-900 border-purple-400 shadow"
+                            : "bg-white/5 border-purple-300/30 text-white/70 hover:bg-white/10 hover:border-purple-300/60"
                         }`}
                       >
-                        <Icon className="w-4 h-4" />
+                        <Icon className="w-3.5 h-3.5" />
                         {cat}
                       </button>
                     );
@@ -568,9 +658,9 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
 
             <div className="space-y-3">
               <p className="text-sm uppercase tracking-wide text-white/50">
-                Pilih layanan ({servicesLoading ? "memuat�" : `${filteredServices.length} opsi`})
+                Pilih layanan ({servicesLoading ? "memuat?" : `${filteredServices.length} opsi`})
               </p>
-              <div className="grid md:grid-cols-2 gap-3 max-h-[360px] overflow-y-auto pr-2">
+              <div className="grid md:grid-cols-2 gap-2 max-h-[360px] overflow-y-auto pr-2">
                 {filteredServices.length === 0 && (
                   <div className="col-span-2 text-white/60 text-sm">Tidak ada layanan.</div>
                 )}
@@ -581,14 +671,17 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
                       key={srv.provider_service_id}
                       type="button"
                       onClick={() => handleSelectService(srv)}
-                      className={`text-left rounded-2xl border px-4 py-4 bg-white/5 hover:bg-white/10 transition ${
-                        selected ? "border-white shadow-lg" : "border-white/10"
+                      aria-pressed={selected}
+                      className={`text-left rounded-xl border px-3 py-3 text-sm bg-white/5 hover:bg-white/10 transition ${
+                        selected
+                          ? "border-purple-400 ring-2 ring-purple-500/20 shadow-lg"
+                          : "border-white/10"
                       }`}
                     >
-                      <p className="text-xs text-white/50">ID: {srv.provider_service_id}</p>
-                      <p className="font-semibold text-lg">{srv.name}</p>
-                      <p className="text-xs text-white/60 mb-2">{srv.category}</p>
-                      <div className="text-sm text-white/80">
+                      <p className="text-[11px] text-white/50">ID: {srv.provider_service_id}</p>
+                      <p className="font-semibold text-base leading-snug">{srv.name}</p>
+                      <p className="text-[11px] text-white/60 mb-2">{srv.category}</p>
+                      <div className="text-xs text-white/80">
                                               </div>
                     </button>
                   );
@@ -612,7 +705,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
                 <label className="text-sm text-white/80 space-y-1 block">
                   Quantity
                   <input
-                    className="w-full rounded-2xl bg-white/5 border border-white/10 px-4 py-3 outline-none"
+                    className="w-full rounded-xl bg-white/5 border border-white/15 px-3 py-2 text-sm outline-none"
                     type="number"
                     min={selectedService.min || 1}
                     max={selectedService.max || undefined}
@@ -624,7 +717,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
                 <label className="text-sm text-white/80 space-y-1 block">
                   Target
                   <input
-                    className="w-full rounded-2xl bg-white/5 border border-white/10 px-4 py-3 outline-none"
+                    className="w-full rounded-xl bg-white/5 border border-white/15 px-3 py-2 text-sm outline-none"
                     value={target}
                     onChange={(e) => setTarget(e.target.value)}
                     placeholder="username / link / catatan"
@@ -647,21 +740,21 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
 
             <fieldset className="rounded-2xl border border-white/10 p-4 space-y-3">
               <legend className="px-2 text-sm text-white/60">Data Pemesan</legend>
-              <div className="grid sm:grid-cols-3 gap-3">
+              <div className="grid sm:grid-cols-3 gap-2">
                 <input
-                  className="rounded-2xl bg-white/5 border border-white/10 px-4 py-3 outline-none"
+                  className="rounded-xl bg-white/5 border border-white/15 px-3 py-2 text-sm outline-none"
                   placeholder="Nama"
                   value={customer.name}
                   onChange={(e) => setCustomer((c) => ({ ...c, name: e.target.value }))}
                 />
                 <input
-                  className="rounded-2xl bg-white/5 border border-white/10 px-4 py-3 outline-none"
+                  className="rounded-xl bg-white/5 border border-white/15 px-3 py-2 text-sm outline-none"
                   placeholder="No. WhatsApp"
                   value={customer.phone}
                   onChange={(e) => setCustomer((c) => ({ ...c, phone: e.target.value }))}
                 />
                 <input
-                  className="rounded-2xl bg-white/5 border border-white/10 px-4 py-3 outline-none"
+                  className="rounded-xl bg-white/5 border border-white/15 px-3 py-2 text-sm outline-none"
                   placeholder="Email"
                   value={customer.email}
                   onChange={(e) => setCustomer((c) => ({ ...c, email: e.target.value }))}
@@ -673,7 +766,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
               type="submit"
               disabled={!selectedService}
               onClick={handleCheckout}
-              className="w-full rounded-2xl bg-gradient-to-r from-blue-500 to-indigo-500 py-3 font-semibold disabled:opacity-50"
+              className="w-full rounded-xl bg-gradient-to-r from-blue-500 to-indigo-500 py-2.5 font-semibold disabled:opacity-50"
             >
               Lanjutkan Pembayaran
             </button>
@@ -804,7 +897,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
                 className="w-full rounded-2xl border border-white/20"
               />
             ) : (
-              <div className="text-sm text-white/70">Sedang membuat gambar struk�</div>
+              <div className="text-sm text-white/70">Sedang membuat gambar struk?</div>
             )}
             {receiptImage && (
               <a
@@ -843,6 +936,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
     </div>
   );
 }
+
 
 
 

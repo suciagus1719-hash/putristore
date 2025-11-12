@@ -11,10 +11,15 @@ const resolvePath = (path) => {
 
 const FALLBACK_IMAGES = [
   "assets/billboard/billboard-1.jpg",
+  "assets/billboard/billboard-1.jpeg",
   "assets/billboard/billboard-2.jpg",
+  "assets/billboard/billboard-2.jpeg",
   "assets/billboard/billboard-3.jpg",
+  "assets/billboard/billboard-3.jpeg",
   "assets/billboard/billboard-4.jpg",
+  "assets/billboard/billboard-4.jpeg",
   "assets/billboard/billboard-5.jpg",
+  "assets/billboard/billboard-5.jpeg",
 ];
 
 const sanitizeList = (list = []) =>

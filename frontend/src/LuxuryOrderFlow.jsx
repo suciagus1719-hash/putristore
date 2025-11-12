@@ -683,7 +683,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
                   Pilih kategori layanan terlebih dahulu.
                 </div>
               ) : (
-                <div className="grid md:grid-cols-2 gap-2 max-h-[280px] overflow-y-auto pr-2">
+                <div className="grid md:grid-cols-2 gap-2 max-h-[260px] overflow-y-auto pr-2">
                   {filteredServices.length === 0 && (
                     <div className="col-span-2 text-white/60 text-sm">Tidak ada layanan.</div>
                   )}
@@ -704,9 +704,9 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
                         <p className="text-[10px] text-white/50">ID: {srv.provider_service_id}</p>
                         <p className="font-semibold text-[12px] leading-snug truncate">{srv.name}</p>
                         <p className="text-[10px] text-white/60 mb-1">{srv.category}</p>
-                        <div className="text-[11px] text-white/80 flex justify-between">
+                        <div className="text-[11px] text-white/80 flex items-center justify-between">
                           <span>Min {srv.min}</span>
-                          <span>{formatIDR(Number(srv.rate_per_1k) || 0)}</span>
+                          <span className="ml-2 whitespace-nowrap">{formatIDR(Number(srv.rate_per_1k) || 0)}</span>
                         </div>
                       </button>
                     );
@@ -720,7 +720,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
                 <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm grid sm:grid-cols-2 gap-3">
                   <div>
                     <p className="text-white/50">Perkiraan Harga</p>
-                    <p className="text-lg font-semibold">{formatIDR(pricePreview)}</p>
+                    <p className="text-base font-semibold">{formatIDR(pricePreview)}</p>
                   </div>
                   <div>
                     <p className="text-white/50">Per 1.000 qty</p>

@@ -88,6 +88,7 @@ const PAYMENT_METHODS = [
 
 const DEFAULT_QUANTITY = 100;
 const createEmptyCustomer = () => ({ name: "", phone: "", email: "" });
+const EXCLUDED_SERVICE_KEYWORDS = ["website traffic"];
 
 const guessPlatform = (s = "") => {
   const n = String(s).toLowerCase();
@@ -188,6 +189,8 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
       if (!platform || !allServices.length) return [];
       const normalized = new Set();
       allServices.forEach((srv) => {
+        const nameLower = String(srv.name || "").toLowerCase();
+        if (EXCLUDED_SERVICE_KEYWORDS.some((kw) => nameLower.includes(kw))) return;
         const plat = guessPlatform(srv.name || srv.category || "");
         if (plat === platform && srv.category) {
           normalized.add(String(srv.category).trim());
@@ -297,6 +300,8 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
 
   const filteredServices = useMemo(() => {
     return allServices.filter((srv) => {
+      const nameLower = String(srv.name || "").toLowerCase();
+      if (EXCLUDED_SERVICE_KEYWORDS.some((kw) => nameLower.includes(kw))) return false;
       const plat = guessPlatform(srv.name || srv.category || "");
       if (plat !== selectedPlatform) return false;
       if (!selectedCategory) return false;

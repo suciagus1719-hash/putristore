@@ -815,7 +815,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
             {selectedService && (
               <>
                 <label className="text-sm text-white/80 space-y-1 block">
-                  Quantity
+                  Jumlah
                   <input
                     className="w-full rounded-xl bg-white/5 border border-white/15 px-3 py-2 text-sm outline-none"
                     type="number"
@@ -824,6 +824,12 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
                     value={quantity}
                     onChange={(e) => setQuantity(Number(e.target.value))}
                   />
+                  <p className="text-xs text-white/60">
+                    Estimasi harga:{" "}
+                    <span className="font-semibold text-white">
+                      {formatIDR(Math.max((Number(selectedService.rate_per_1k) || 0) / 1000 * (quantity || (selectedService.min || 1)), 0))}
+                    </span>
+                  </p>
                 </label>
 
                 <label className="text-sm text-white/80 space-y-1 block">

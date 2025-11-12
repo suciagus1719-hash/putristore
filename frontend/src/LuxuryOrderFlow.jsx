@@ -134,8 +134,8 @@ const INSTAGRAM_CATEGORY_ORDER = [
   "Instagram - Views [ Video / IGTV / Reels ]",
   "Instagram - Views [ Indonesia ]",
 ];
-const PRICE_MARKUP = Number(import.meta.env?.VITE_PRICE_MARKUP ?? 0.05);
-const MARKUP_FACTOR = 1 + PRICE_MARKUP;
+const PROFIT_PERCENT = Number(import.meta.env?.VITE_PROFIT_RATE ?? 0.5);
+const MARKUP_FACTOR = 1 + PROFIT_PERCENT;
 const applyMarkup = (base) => Math.max(base * MARKUP_FACTOR, 0);
 
 const shouldHideCategory = (value = "") => {
@@ -417,6 +417,13 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
     const base = (rate / 1000) * qty;
     return applyMarkup(base);
   }, [selectedService, quantity]);
+
+  const pricePerHundred = useMemo(() => {
+    if (!selectedService) return 0;
+    const rate = Number(selectedService.rate_per_1k) || 0;
+    const base = rate / 10; // rate per 100 qty
+    return applyMarkup(base);
+  }, [selectedService]);
 
   const request = async (path, opts = {}) => {
     const res = await fetch(`${apiBase}${path}`, opts);
@@ -830,7 +837,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
                     onChange={(e) => setQuantity(Number(e.target.value))}
                   />
                   <p className="text-xs text-white/60">
-                    Estimasi harga:{" "}
+                    Estimasi harga ({formatIDR(applyMarkup((Number(selectedService.rate_per_1k) || 0) / 1000))} /1000):{" "}
                     <span className="font-semibold text-white">{formatIDR(pricePreview)}</span>
                   </p>
                 </label>
@@ -848,7 +855,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
                 <div className="text-sm border border-white/10 rounded-2xl p-4 bg-black/20 space-y-3">
                   <p className="font-semibold text-white">Informasi Layanan</p>
                   <div className="grid sm:grid-cols-2 gap-2 text-white/80">
-                    <p>Harga per 1.000 qty: {formatIDR(selectedService.rate_per_1k)}</p>
+                    <p>Harga per 100 qty (termasuk margin): {formatIDR(pricePerHundred)}</p>
                     <p>Min Order: {selectedService.min}</p>
                     <p>Max Order: {selectedService.max}</p>
                   </div>

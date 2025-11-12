@@ -164,6 +164,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
   const [error, setError] = useState("");
   const [orderTimestamp, setOrderTimestamp] = useState(null);
   const [receiptImage, setReceiptImage] = useState(null);
+  const [buttonGlowPhase, setButtonGlowPhase] = useState(0);
 
   const categoryCache = useRef({});
   const prevPlatformRef = useRef(selectedPlatform);
@@ -636,7 +637,14 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
             </div>
 
             {categoryLoading ? (
-              <p className="text-sm text-white/60">Memuat kategori?</p>
+              <div className="flex items-center gap-2 text-sm text-white/70">
+                <div className="flex items-center gap-1">
+                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-white/60 animate-[pulse_1.2s_ease-in-out_infinite]" />
+                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-white/40 animate-[pulse_1.2s_ease-in-out_infinite_150ms]" />
+                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-white/20 animate-[pulse_1.2s_ease-in-out_infinite_300ms]" />
+                </div>
+                <span>Memuat kategori...</span>
+              </div>
             ) : (
               selectedPlatform && (
                 <div className="space-y-2">
@@ -782,11 +790,23 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
 
             <button
               type="submit"
-              disabled={!selectedService}
+              disabled={!selectedService || loading}
               onClick={handleCheckout}
-              className="w-full rounded-xl bg-gradient-to-r from-blue-500 to-indigo-500 py-2.5 font-semibold disabled:opacity-50"
+              className={`w-full rounded-xl bg-gradient-to-r from-blue-500 to-indigo-500 py-2.5 font-semibold relative overflow-hidden transition ${
+                loading ? "opacity-80 cursor-wait" : ""
+              }`}
             >
-              Lanjutkan Pembayaran
+              <span className="relative z-10 flex items-center justify-center gap-2">
+                {loading && (
+                  <span className="h-4 w-4 animate-spin rounded-full border border-white/20 border-t-white" />
+                )}
+                {loading ? "Memproses..." : "Lanjutkan Pembayaran"}
+              </span>
+              <span
+                className={`absolute inset-0 bg-white/20 blur-md transition ${
+                  loading ? "opacity-100" : "opacity-0"
+                }`}
+              />
             </button>
 
             <p className="text-xs text-white/40 text-center">Server: {apiBase}</p>

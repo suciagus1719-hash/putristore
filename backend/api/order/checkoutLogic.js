@@ -40,16 +40,16 @@ async function saveOrderMeta(meta) {
 
 async function processCheckout(body = {}) {
   try {
-    const {
-      service_id,
-      link,
-      quantity: rawQuantity,
-      service_name,
-      charge: rawCharge,
-      name,
-      email,
-      phone,
-    } = body;
+    const service_id =
+      body.service_id || body.serviceId || body.service || body.serviceID || null;
+    const link =
+      body.link || body.target || body.url || body.username || body.profile || null;
+    const rawQuantity = body.quantity ?? body.qty ?? body.volume ?? body.count ?? null;
+    const service_name = body.service_name || body.serviceName || null;
+    const rawCharge = body.charge ?? body.price ?? body.amount ?? null;
+    const name = body.name || body.customer?.name || null;
+    const email = body.email || body.customer?.email || null;
+    const phone = body.phone || body.customer?.phone || null;
 
     if (!service_id || !link || rawQuantity === undefined || rawQuantity === null) {
       return {

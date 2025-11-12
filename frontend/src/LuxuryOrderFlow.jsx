@@ -704,10 +704,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
                         <p className="text-[10px] text-white/50">ID: {srv.provider_service_id}</p>
                         <p className="font-semibold text-[12px] leading-snug truncate">{srv.name}</p>
                         <p className="text-[10px] text-white/60 mb-1">{srv.category}</p>
-                        <div className="text-[11px] text-white/80 flex items-center justify-between">
-                          <span>Min {srv.min}</span>
-                          <span className="ml-2 whitespace-nowrap">{formatIDR(Number(srv.rate_per_1k) || 0)}</span>
-                        </div>
+                        <p className="text-[11px] text-white/80">Min {srv.min}</p>
                       </button>
                     );
                   })}

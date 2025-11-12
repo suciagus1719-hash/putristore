@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import AnimatedBillboardBackground from "./components/AnimatedBillboardBackground";
 import {
   Instagram,
   Music2,
@@ -45,7 +46,7 @@ const AVATAR_URL =
   "https://images.unsplash.com/photo-1504593811423-6dd665756598?auto=format&fit=crop&w=200&q=60";
 const BRAND_BADGE_URL =
   (import.meta?.env?.VITE_BRAND_BADGE && import.meta.env.VITE_BRAND_BADGE.trim()) ||
-  "https://i.ibb.co/pRFcpq0/putri-gmoyy.png";
+  "/assets/brand/logo.png";
 const QRIS_IMAGE_URL = "https://i.imgur.com/lQjQpMZ.png"; // ganti dengan QRIS asli
 
 const PLATFORM_CARDS = [
@@ -647,11 +648,8 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
   };
 
   return (
-    <div
-      className="min-h-[100svh] bg-gradient-to-b from-[#1d0b2d] via-[#37106b] to-[#090213] text-white"
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
-    >
+    <AnimatedBillboardBackground>
+      <div className="min-h-[100svh] text-white" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
       {loading && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur">
           <div className="animate-spin rounded-full h-16 w-16 border-4 border-white border-t-transparent" />
@@ -1078,6 +1076,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
         )}
       </main>
     </div>
+  </AnimatedBillboardBackground>
   );
 }
 

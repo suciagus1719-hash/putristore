@@ -1,0 +1,8 @@
+@keyframes pan-horizontal {
+  0% { background-position: 0% center; }
+  100% { background-position: 100% center; }
+}
+
+.animate-pan {
+  animation: pan-horizontal 30s linear infinite;
+}

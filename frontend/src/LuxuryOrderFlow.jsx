@@ -603,27 +603,6 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
             </p>
           </div>
         </header>
-          <div className="space-y-2 max-w-3xl">
-            <p className="text-sm uppercase tracking-[0.3em] text-white/60">Premium Flow</p>
-            <h1 className="text-4xl font-extrabold">Luxury Order Experience</h1>
-            <p className="text-white/70 max-w-2xl">
-              Pilih platform favoritmu, tentukan jenis layanan, dan nikmati proses pembayaran modern
-              lengkap dengan monitoring admin.
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="rounded-full bg-gradient-to-br from-purple-500/60 to-indigo-500/60 p-1 shadow-2xl shadow-purple-900/40">
-              <img
-                src={BRAND_BADGE_URL}
-                alt="Brand Badge"
-                className="w-10 h-10 sm:w-11 sm:h-11 rounded-full border border-white/40 object-cover bg-white/10 backdrop-blur"
-              />
-            </div>
-            <button className="text-sm font-semibold px-4 py-1.5 rounded-full border border-white/30 text-white/80 hover:border-white hover:text-white transition">
-              Masuk / Daftar
-            </button>
-          </div>
-        </header>
 
         {error && (
           <div className="rounded-2xl border border-red-400/50 bg-red-500/10 px-4 py-3 text-sm text-red-200">

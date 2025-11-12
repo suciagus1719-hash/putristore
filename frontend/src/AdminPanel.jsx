@@ -3,12 +3,13 @@ import React, { useEffect, useState } from "react";
 const API_BASE = import.meta.env.VITE_API_URL || "https://putristore-backend.vercel.app";
 
 export default function AdminPanel() {
-  const [password, setPassword] = useState("");
+  const [passwordInput, setPasswordInput] = useState("");
+  const [adminKey, setAdminKey] = useState("");
   const [authed, setAuthed] = useState(false);
   const [orders, setOrders] = useState([]);
   const [error, setError] = useState("");
 
-  const headers = authed ? { "x-admin-key": password } : {};
+  const headers = adminKey ? { "x-admin-key": adminKey } : {};
 
   const fetchOrders = async () => {
     setError("");
@@ -41,6 +42,25 @@ export default function AdminPanel() {
     if (authed) fetchOrders();
   }, [authed]);
 
+  const handleLogin = async () => {
+    if (!passwordInput.trim()) {
+      setError("Password wajib diisi");
+      return;
+    }
+    setError("");
+    try {
+      const attemptHeaders = { "x-admin-key": passwordInput.trim() };
+      const res = await fetch(`${API_BASE}/api/admin/orders`, { headers: attemptHeaders });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Password salah");
+      setOrders(data);
+      setAdminKey(passwordInput.trim());
+      setAuthed(true);
+    } catch (err) {
+      setError(err.message || "Password salah");
+    }
+  };
+
   if (!authed) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-900 text-white">
@@ -51,12 +71,12 @@ export default function AdminPanel() {
             className="p-3 rounded-lg bg-black/40"
             type="password"
             placeholder="Admin Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            value={passwordInput}
+            onChange={(e) => setPasswordInput(e.target.value)}
           />
           <button
             className="w-full bg-blue-500 p-3 rounded-lg"
-            onClick={() => setAuthed(true)}
+            onClick={handleLogin}
           >
             Masuk
           </button>

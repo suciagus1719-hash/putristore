@@ -92,6 +92,11 @@ const EXCLUDED_SERVICE_KEYWORDS = ["website traffic"];
 const EXCLUDED_CATEGORY_KEYWORDS = ["website traffic", "traffic", "visitor", "visit"];
 const EXCLUDED_PLATFORM_NAMES = ["Website Traffic", "Website Visitor", "Traffic"];
 
+const shouldHideCategory = (value = "") => {
+  const lower = String(value).toLowerCase();
+  return lower && EXCLUDED_CATEGORY_KEYWORDS.some((kw) => lower.includes(kw));
+};
+
 const guessPlatform = (s = "") => {
   const n = String(s).toLowerCase();
   if (n.includes("tiktok")) return "TikTok";
@@ -150,8 +155,8 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
       .map((cat) => String(cat || "").trim())
       .filter((cat) => {
         if (!cat) return false;
+        if (shouldHideCategory(cat)) return false;
         const lower = cat.toLowerCase();
-        if (EXCLUDED_CATEGORY_KEYWORDS.some((kw) => lower.includes(kw))) return false;
         return !FALLBACK_CATEGORIES.some((fallback) => fallback.toLowerCase() === lower);
       });
   }, [categories]);
@@ -196,7 +201,8 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
         if (EXCLUDED_SERVICE_KEYWORDS.some((kw) => nameLower.includes(kw))) return;
         const plat = guessPlatform(srv.name || srv.category || "");
         if (plat === platform && srv.category) {
-          normalized.add(String(srv.category).trim());
+          const cat = String(srv.category).trim();
+          if (!shouldHideCategory(cat)) normalized.add(cat);
         }
       });
       return Array.from(normalized)
@@ -204,7 +210,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
         .filter((cat) => {
           if (!cat) return false;
           const lower = cat.toLowerCase();
-          if (EXCLUDED_CATEGORY_KEYWORDS.some((kw) => lower.includes(kw))) return false;
+          if (shouldHideCategory(cat)) return false;
           return !FALLBACK_CATEGORIES.some((fallback) => fallback.toLowerCase() === lower);
         });
     },
@@ -236,8 +242,9 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
       return;
     }
     const applyCategories = (list = []) => {
-      setCategories(list);
-      setSelectedCategory((prev) => (list.includes(prev) ? prev : list[0] || ""));
+      const filtered = list.filter((item) => item && !shouldHideCategory(item));
+      setCategories(filtered);
+      setSelectedCategory((prev) => (filtered.includes(prev) ? prev : filtered[0] || ""));
     };
 
     const platformChanged = prevPlatformRef.current !== selectedPlatform;
@@ -269,11 +276,10 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
         );
         const data = await res.json();
         const sanitized = Array.isArray(data)
-          ? data
-              .map((cat) => String(cat || "").trim())
-              .filter(Boolean)
+          ? data.map((cat) => String(cat || "").trim()).filter(Boolean)
           : [];
         const refined = sanitized.filter((cat) => {
+          if (shouldHideCategory(cat)) return false;
           const lower = cat.toLowerCase();
           return !FALLBACK_CATEGORIES.some((fallback) => fallback.toLowerCase() === lower);
         });
@@ -312,6 +318,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
     return allServices.filter((srv) => {
       const nameLower = String(srv.name || "").toLowerCase();
       if (EXCLUDED_SERVICE_KEYWORDS.some((kw) => nameLower.includes(kw))) return false;
+      if (shouldHideCategory(srv.category)) return false;
       const plat = guessPlatform(srv.name || srv.category || "");
       if (plat !== selectedPlatform) return false;
       if (!selectedCategory) return false;

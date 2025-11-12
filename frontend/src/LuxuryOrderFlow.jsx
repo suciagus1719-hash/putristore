@@ -34,7 +34,8 @@ const AVATAR_URL =
   (import.meta?.env?.VITE_OWNER_AVATAR && import.meta.env.VITE_OWNER_AVATAR.trim()) ||
   "https://images.unsplash.com/photo-1504593811423-6dd665756598?auto=format&fit=crop&w=200&q=60";
 const BRAND_BADGE_URL =
-  (import.meta?.env?.VITE_BRAND_BADGE && import.meta.env.VITE_BRAND_BADGE.trim()) || AVATAR_URL;
+  (import.meta?.env?.VITE_BRAND_BADGE && import.meta.env.VITE_BRAND_BADGE.trim()) ||
+  "https://i.ibb.co/pRFcpq0/putri-gmoyy.png";
 const QRIS_IMAGE_URL = "https://i.imgur.com/lQjQpMZ.png"; // ganti dengan QRIS asli
 
 const PLATFORM_CARDS = [
@@ -580,8 +581,8 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
       </aside>
 
       <main className="max-w-5xl mx-auto px-4 py-12 space-y-6">
-        <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="space-y-2">
+        <header className="mb-8 flex items-start justify-between">
+          <div className="space-y-2 max-w-3xl">
             <p className="text-sm uppercase tracking-[0.3em] text-white/60">Premium Flow</p>
             <h1 className="text-4xl font-extrabold">Luxury Order Experience</h1>
             <p className="text-white/70 max-w-2xl">
@@ -589,14 +590,17 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
               lengkap dengan monitoring admin.
             </p>
           </div>
-          <div className="relative">
+          <div className="flex items-center gap-3">
             <div className="rounded-full bg-gradient-to-br from-purple-500/60 to-indigo-500/60 p-1 shadow-2xl shadow-purple-900/40">
               <img
                 src={BRAND_BADGE_URL}
                 alt="Brand Badge"
-                className="w-12 h-12 sm:w-14 sm:h-14 rounded-full border border-white/40 object-contain bg-white/10 backdrop-blur"
+                className="w-10 h-10 sm:w-11 sm:h-11 rounded-full border border-white/40 object-cover bg-white/10 backdrop-blur"
               />
             </div>
+            <button className="text-sm font-semibold px-4 py-1.5 rounded-full border border-white/30 text-white/80 hover:border-white hover:text-white transition">
+              Masuk / Daftar
+            </button>
           </div>
         </header>
 

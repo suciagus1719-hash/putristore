@@ -44,9 +44,13 @@ const API_FALLBACK = "https://putristore-backend.vercel.app";
 const AVATAR_URL =
   (import.meta?.env?.VITE_OWNER_AVATAR && import.meta.env.VITE_OWNER_AVATAR.trim()) ||
   "https://images.unsplash.com/photo-1504593811423-6dd665756598?auto=format&fit=crop&w=200&q=60";
-const BRAND_BADGE_URL =
-  (import.meta?.env?.VITE_BRAND_BADGE && import.meta.env.VITE_BRAND_BADGE.trim()) ||
-  "/assets/brand/logo.png";
+const BRAND_BADGE_CANDIDATES = [
+  import.meta?.env?.VITE_BRAND_BADGE && import.meta.env.VITE_BRAND_BADGE.trim(),
+  "/assets/brand/logo.png",
+  "/assets/brand/brand.png",
+  "/assets/brand/foto.png",
+];
+const BRAND_BADGE_URL = BRAND_BADGE_CANDIDATES.find((src) => typeof src === "string" && src.length) || "";
 const QRIS_IMAGE_URL = "https://i.imgur.com/lQjQpMZ.png"; // ganti dengan QRIS asli
 
 const PLATFORM_CARDS = [
@@ -1109,7 +1113,6 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
     </div>
   );
 }
-
 
 
 

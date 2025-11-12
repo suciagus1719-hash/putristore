@@ -453,7 +453,11 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
         service_id: serviceId,
         quantity: Number(quantity),
         target: target.trim(),
-        customer,
+        customer: {
+          name: customer.name?.trim() || "",
+          phone: customer.phone?.trim() || "",
+          email: customer.email?.trim() || "",
+        },
       };
       const data = await request("/api/order/checkout", {
         method: "POST",
@@ -867,7 +871,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
             )}
 
             <fieldset className="rounded-2xl border border-white/10 p-4 space-y-3">
-              <legend className="px-2 text-sm text-white/60">Data Pemesan</legend>
+              <legend className="px-2 text-sm text-white/60">Data Pemesan (Opsional)</legend>
               <div className="grid sm:grid-cols-3 gap-2">
                 <input
                   className="rounded-xl bg-white/5 border border-white/15 px-3 py-2 text-sm outline-none"

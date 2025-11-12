@@ -1,11 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 
+const BASE_URL = (import.meta.env?.BASE_URL || import.meta.env?.VITE_BASE_URL || "/").replace(/\/+$/, "/");
+const resolvePath = (path) => {
+  const clean = String(path || "").trim();
+  if (!clean) return "";
+  if (/^(https?:)?\/\//i.test(clean) || clean.startsWith("data:")) return clean;
+  const normalized = clean.replace(/^\/+/, "");
+  return `${BASE_URL}${normalized}`;
+};
+
 const FALLBACK_IMAGES = [
-  "/assets/billboard/billboard-1.jpg",
-  "/assets/billboard/billboard-2.jpg",
-  "/assets/billboard/billboard-3.jpg",
-  "/assets/billboard/billboard-4.jpg",
-  "/assets/billboard/billboard-5.jpg",
+  "assets/billboard/billboard-1.jpg",
+  "assets/billboard/billboard-2.jpg",
+  "assets/billboard/billboard-3.jpg",
+  "assets/billboard/billboard-4.jpg",
+  "assets/billboard/billboard-5.jpg",
 ];
 
 const sanitizeList = (list = []) =>
@@ -19,7 +28,7 @@ const ENV_IMAGES = sanitizeList(
     .map((src) => src.replace(/^['"]|['"]$/g, ""))
 );
 
-const BILLBOARD_IMAGES = sanitizeList([...ENV_IMAGES, ...FALLBACK_IMAGES]);
+const BILLBOARD_IMAGES = sanitizeList([...ENV_IMAGES, ...FALLBACK_IMAGES]).map(resolvePath);
 
 export default function AnimatedBillboardBackground({ children }) {
   const [index, setIndex] = useState(0);

@@ -837,7 +837,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
                     onChange={(e) => setQuantity(Number(e.target.value))}
                   />
                   <p className="text-xs text-white/60">
-                    Total harga ({formatIDR(applyMarkup((Number(selectedService.rate_per_1k) || 0) / 1000))} /1000):{" "}
+                    Total harga{" "}
                     <span className="font-semibold text-white">{formatIDR(pricePreview)}</span>
                   </p>
                 </label>
@@ -854,10 +854,10 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
 
                 <div className="text-sm border border-white/10 rounded-2xl p-4 bg-black/20 space-y-3">
                   <p className="font-semibold text-white">Informasi Layanan</p>
-                  <div className="grid sm:grid-cols-2 gap-2 text-white/80">
-                    <p>Harga per 100 qty (termasuk margin): {formatIDR(pricePerHundred)}</p>
+                  <div className="text-white/80 space-y-1">
                     <p>Min Order: {selectedService.min}</p>
                     <p>Max Order: {selectedService.max}</p>
+                    <p>Harga / 100: {formatIDR(pricePerHundred)}</p>
                   </div>
                   <p className="whitespace-pre-line leading-relaxed text-white/70">
                     {selectedService.description || "Deskripsi belum tersedia dari panel."}

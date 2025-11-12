@@ -837,7 +837,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
                     onChange={(e) => setQuantity(Number(e.target.value))}
                   />
                   <p className="text-xs text-white/60">
-                    Estimasi harga ({formatIDR(applyMarkup((Number(selectedService.rate_per_1k) || 0) / 1000))} /1000):{" "}
+                    Total harga ({formatIDR(applyMarkup((Number(selectedService.rate_per_1k) || 0) / 1000))} /1000):{" "}
                     <span className="font-semibold text-white">{formatIDR(pricePreview)}</span>
                   </p>
                 </label>

@@ -89,6 +89,7 @@ const PAYMENT_METHODS = [
 const DEFAULT_QUANTITY = 100;
 const createEmptyCustomer = () => ({ name: "", phone: "", email: "" });
 const EXCLUDED_SERVICE_KEYWORDS = ["website traffic"];
+const EXCLUDED_CATEGORY_KEYWORDS = ["website traffic", "traffic", "visitor", "visit"];
 
 const guessPlatform = (s = "") => {
   const n = String(s).toLowerCase();
@@ -198,11 +199,12 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
       });
       return Array.from(normalized)
         .map((cat) => cat.trim())
-        .filter(
-          (cat) =>
-            cat &&
-            !FALLBACK_CATEGORIES.some((fallback) => fallback.toLowerCase() === cat.toLowerCase())
-        );
+        .filter((cat) => {
+          if (!cat) return false;
+          const lower = cat.toLowerCase();
+          if (EXCLUDED_CATEGORY_KEYWORDS.some((kw) => lower.includes(kw))) return false;
+          return !FALLBACK_CATEGORIES.some((fallback) => fallback.toLowerCase() === lower);
+        });
     },
     [allServices]
   );

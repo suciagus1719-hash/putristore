@@ -100,6 +100,7 @@ const FALLBACK_CATEGORIES = [
   "Members",
   "Reactions",
   "Other",
+  "Discord",
 ];
 
 const PAYMENT_METHODS = [

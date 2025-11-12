@@ -675,7 +675,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
                   Pilih kategori layanan terlebih dahulu.
                 </div>
               ) : (
-                <div className="grid md:grid-cols-2 gap-2 max-h-[320px] overflow-y-auto pr-2">
+                <div className="grid md:grid-cols-2 gap-2 max-h-[280px] overflow-y-auto pr-2">
                   {filteredServices.length === 0 && (
                     <div className="col-span-2 text-white/60 text-sm">Tidak ada layanan.</div>
                   )}
@@ -687,14 +687,14 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
                         type="button"
                         onClick={() => handleSelectService(srv)}
                         aria-pressed={selected}
-                        className={`text-left rounded-lg border px-2.5 py-2 text-xs bg-white/5 hover:bg-white/10 transition ${
+                        className={`text-left rounded-lg border px-2 py-1.5 text-[11px] bg-white/5 hover:bg-white/10 transition ${
                           selected
                             ? "border-purple-400 ring-2 ring-purple-500/20 shadow-lg"
                             : "border-white/10"
                         }`}
                       >
                         <p className="text-[10px] text-white/50">ID: {srv.provider_service_id}</p>
-                        <p className="font-semibold text-sm leading-snug truncate">{srv.name}</p>
+                        <p className="font-semibold text-[12px] leading-snug truncate">{srv.name}</p>
                         <p className="text-[10px] text-white/60 mb-1">{srv.category}</p>
                         <div className="text-[11px] text-white/80 flex justify-between">
                           <span>Min {srv.min}</span>

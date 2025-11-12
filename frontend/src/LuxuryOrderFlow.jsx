@@ -1080,7 +1080,6 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
         )}
       </main>
     </div>
-  </AnimatedBillboardBackground>
   );
 }
 

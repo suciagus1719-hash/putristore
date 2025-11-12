@@ -714,17 +714,6 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
 
             {selectedService && (
               <>
-                <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm grid sm:grid-cols-2 gap-3">
-                  <div>
-                    <p className="text-white/50">Perkiraan Harga</p>
-                    <p className="text-base font-semibold">{formatIDR(pricePreview)}</p>
-                  </div>
-                  <div>
-                    <p className="text-white/50">Per 1.000 qty</p>
-                    <p>{formatIDR(selectedService.rate_per_1k)}</p>
-                  </div>
-                </div>
-
                 <label className="text-sm text-white/80 space-y-1 block">
                   Quantity
                   <input

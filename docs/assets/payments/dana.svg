@@ -1,0 +1,6 @@
+<svg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+  <rect width="400" height="400" rx="24" fill="#0f172a"/>
+  <text x="200" y="160" text-anchor="middle" font-size="48" fill="#38bdf8" font-family="'Poppins', sans-serif">DANA</text>
+  <text x="200" y="210" text-anchor="middle" font-size="18" fill="#bae6fd" font-family="'Poppins', sans-serif">Upload logo resmi</text>
+  <text x="200" y="240" text-anchor="middle" font-size="18" fill="#bae6fd" font-family="'Poppins', sans-serif">di assets/payments/dana.svg</text>
+</svg>

@@ -555,6 +555,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
         notes: payment.notes?.trim() || "",
         order_snapshot: snapshotPayload || order,
         order_payload: order,
+        hydration_token: order?.hydration_token || "",
       };
       let updatedOrder = (
         await request("/api/order/payment-method", {
@@ -574,6 +575,9 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
           form.append("order_snapshot", JSON.stringify(order));
         }
         form.append("order_payload", JSON.stringify(order));
+        if (order?.hydration_token) {
+          form.append("hydration_token", order.hydration_token);
+        }
         const uploadResult = await request("/api/order/upload-proof", {
           method: "POST",
           body: form,

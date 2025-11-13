@@ -82,6 +82,7 @@ export default function PaymentFlow() {
           amount: Number(payment.amount),
           order_snapshot: snapshotPayload || order,
           order_payload: order,
+          hydration_token: order?.hydration_token || "",
           proof_channel: proof ? "upload" : "email",
           fallback_email: PAYMENT_PROOF_EMAIL,
         }),
@@ -109,6 +110,9 @@ export default function PaymentFlow() {
         form.append("order_snapshot", JSON.stringify(order));
       }
       form.append("order_payload", JSON.stringify(order));
+      if (order?.hydration_token) {
+        form.append("hydration_token", order.hydration_token);
+      }
       if (order) {
         form.append("order_snapshot", JSON.stringify(order));
       }

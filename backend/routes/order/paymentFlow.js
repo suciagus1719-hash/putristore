@@ -1,5 +1,6 @@
 const express = require("express");
 const multer = require("multer");
+const crypto = require("crypto");
 const fetch = global.fetch || require("node-fetch");
 const applyCors = require("./cors");
 const { saveOrder, getOrder, listOrders } = require("./orderStore");
@@ -15,6 +16,11 @@ const REVIEW_DEADLINE_MS = 24 * 60 * 60 * 1000; // 1x24 jam
 const PAYMENT_WINDOW_MINUTES = Math.max(Number(process.env.PAYMENT_WINDOW_MINUTES || 30), 5);
 const PAYMENT_WINDOW_MS = PAYMENT_WINDOW_MINUTES * 60 * 1000;
 const PAYMENT_PROOF_EMAIL = process.env.PAYMENT_PROOF_EMAIL || process.env.ADMIN_EMAIL || null;
+const HYDRATION_SECRET =
+  process.env.ORDER_SIGN_KEY ||
+  process.env.ADMIN_SECRET ||
+  process.env.SMMPANEL_SECRET ||
+  "putristore-hydration-secret";
 
 // penyimpanan bukti (in-memory -> disimpan sebagai data URL pada order)
 const upload = multer({
@@ -24,6 +30,7 @@ const upload = multer({
 
 async function cacheOrder(order) {
   if (!order?.order_id) return;
+  order.hydration_token = order.hydration_token || encodeHydrationToken(order);
   await saveOrder(order);
 }
 
@@ -59,6 +66,53 @@ const toNum = (v) => {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 };
+
+const toBase64Url = (buffer) =>
+  Buffer.from(buffer)
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+
+const fromBase64Url = (str) => {
+  const normalized = str.replace(/-/g, "+").replace(/_/g, "/") + "==".slice(0, (4 - (str.length % 4)) % 4);
+  return Buffer.from(normalized, "base64");
+};
+
+function encodeHydrationToken(order) {
+  if (!order?.order_id) return null;
+  const payloadObj = {
+    order_id: order.order_id,
+    service_id: order.service_id,
+    service_name: order.service_name || null,
+    platform: order.platform || null,
+    category: order.category || null,
+    quantity: order.quantity,
+    target: order.target,
+    customer: order.customer || {},
+    notes: order.notes || null,
+    price: order.price || null,
+    payment: order.payment || null,
+    created_at: order.created_at || new Date().toISOString(),
+  };
+  const payload = toBase64Url(JSON.stringify(payloadObj));
+  const signature = toBase64Url(crypto.createHmac("sha256", HYDRATION_SECRET).update(payload).digest());
+  return `${payload}.${signature}`;
+}
+
+function decodeHydrationToken(token) {
+  if (!token || typeof token !== "string") return null;
+  const [payload, signature] = token.split(".");
+  if (!payload || !signature) return null;
+  const expected = toBase64Url(crypto.createHmac("sha256", HYDRATION_SECRET).update(payload).digest());
+  if (expected !== signature) return null;
+  try {
+    const json = fromBase64Url(payload).toString("utf8");
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
 
 function decodeMaybeBase64(value) {
   if (typeof value !== "string") return value;
@@ -136,18 +190,29 @@ function normalizeOrderSnapshot(snapshot, fallbackOrderId) {
     timeline: snapshot.timeline || {},
     auto_cancelled: snapshot.auto_cancelled || false,
     cancel_reason: snapshot.cancel_reason || null,
+    hydration_token: snapshot.hydration_token || null,
   };
 }
 
-async function resolveOrder(orderId, snapshotRaw, payloadRaw) {
+async function resolveOrder(orderId, snapshotRaw, payloadRaw, token) {
   const primary = parseSnapshot(snapshotRaw);
   const fallbackPayload = primary || parseSnapshot(payloadRaw);
   const normalized = normalizeOrderSnapshot(primary || fallbackPayload, orderId);
   if (normalized) {
+    normalized.hydration_token = normalized.hydration_token || encodeHydrationToken(normalized);
     await cacheOrder(normalized);
     return normalized;
   }
   if (!orderId) return null;
+  const decoded = decodeHydrationToken(token);
+  if (decoded) {
+    const rebuilt = normalizeOrderSnapshot(decoded, orderId);
+    if (rebuilt) {
+      rebuilt.hydration_token = encodeHydrationToken(rebuilt);
+      await cacheOrder(rebuilt);
+      return rebuilt;
+    }
+  }
   return loadOrder(orderId);
 }
 
@@ -297,6 +362,7 @@ router.post("/order/checkout", async (req, res) => {
       pending_payment_at: now.toISOString(),
     },
   };
+  order.hydration_token = encodeHydrationToken(order);
   await cacheOrder(order);
   return res.json({ ok: true, order });
 });
@@ -312,9 +378,10 @@ router.post("/order/payment-method", async (req, res) => {
     fallback_email,
     order_snapshot,
     order_payload,
+    hydration_token,
   } = req.body || {};
 
-  const order = await resolveOrder(order_id, order_snapshot, order_payload);
+  const order = await resolveOrder(order_id, order_snapshot, order_payload, hydration_token);
   if (!order) return res.status(404).json({ ok: false, message: "Order tidak ditemukan" });
   if (["cancelled", "rejected"].includes(order.status)) {
     return res.status(409).json({ ok: false, message: "Order sudah tidak aktif" });
@@ -351,14 +418,15 @@ router.post("/order/payment-method", async (req, res) => {
     payment_reported_at: order.payment.reported_at,
   };
 
+  order.hydration_token = encodeHydrationToken(order);
   await cacheOrder(order);
   return res.json({ ok: true, order });
 });
 
 // upload bukti transfer
 router.post("/order/upload-proof", upload.single("proof"), async (req, res) => {
-  const { order_id, order_snapshot, order_payload } = req.body || {};
-  const order = await resolveOrder(order_id, order_snapshot, order_payload);
+  const { order_id, order_snapshot, order_payload, hydration_token } = req.body || {};
+  const order = await resolveOrder(order_id, order_snapshot, order_payload, hydration_token);
   if (!order) return res.status(404).json({ ok: false, message: "Order tidak ditemukan" });
   if (!req.file) return res.status(400).json({ ok: false, message: "Bukti wajib diupload" });
 
@@ -380,6 +448,7 @@ router.post("/order/upload-proof", upload.single("proof"), async (req, res) => {
     ...(order.timeline || {}),
     proof_uploaded_at: order.payment.uploaded_at,
   };
+  order.hydration_token = encodeHydrationToken(order);
   await cacheOrder(order);
   return res.json({ ok: true, order });
 });
@@ -431,6 +500,7 @@ router.post("/admin/orders/:orderId/status", async (req, res) => {
     ...(nextStatus === "rejected" ? { rejected_at: now } : {}),
     ...(nextStatus === "cancelled" ? { cancelled_at: now } : {}),
   };
+  order.hydration_token = encodeHydrationToken(order);
   await cacheOrder(order);
 
   return res.json({ ok: true, order });

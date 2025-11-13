@@ -455,8 +455,12 @@ router.post("/order/upload-proof", upload.single("proof"), async (req, res) => {
 
 // admin: auth sederhana pakai header
 router.use("/admin", (req, res, next) => {
-  const token = req.headers["x-admin-key"];
-  if (token !== process.env.ADMIN_SECRET) {
+  const expected = (process.env.ADMIN_SECRET || "").trim();
+  if (!expected) {
+    return res.status(500).json({ ok: false, message: "ADMIN_SECRET belum diset" });
+  }
+  const token = String(req.headers["x-admin-key"] || "").trim();
+  if (token !== expected) {
     return res.status(401).json({ ok: false, message: "Unauthorized" });
   }
   next();

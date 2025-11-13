@@ -1245,16 +1245,14 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
             </div>
 
             <div className="space-y-3">
-              <label className="text-sm text-white/80 space-y-2 block">
-                Catatan Pembayaran (opsional)
-                <textarea
-                  className="w-full rounded-2xl border border-white/10 bg-white/5 p-3 text-white/80"
-                  rows={2}
-                  placeholder="Contoh: transfer dari rekening BRI kakak / bukti saya kirim via email."
-                  value={payment.notes}
-                  onChange={(e) => setPayment((prev) => ({ ...prev, notes: e.target.value }))}
-                />
-              </label>
+              <div className="rounded-2xl border border-white/15 bg-white/5 p-4 text-sm text-white/70 space-y-2">
+                <p className="text-white font-semibold text-base">Informasi Pembayaran</p>
+                <p>
+                  Pastikan jumlah transfer sesuai dengan total di atas dan sertakan berita acara{" "}
+                  <span className="font-semibold text-white">ORDER + Nama Kamu</span>. Bukti pembayaran yang jelas akan
+                  mempercepat proses verifikasi admin.
+                </p>
+              </div>
               <label className="text-sm text-white/80 space-y-2 block">
                 Upload Bukti Pembayaran (opsional)
                 <div className="rounded-2xl border border-dashed border-white/30 bg-white/5 px-4 py-6 text-center text-sm text-white/70">

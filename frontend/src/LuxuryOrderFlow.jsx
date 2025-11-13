@@ -68,18 +68,18 @@ const PAYMENT_METHODS = [
   { key: "qris", label: "QRIS", icon: CreditCard, asset: "assets/payments/qris.svg" },
   { key: "dana", label: "Dana", icon: Wallet },
   { key: "gopay", label: "GoPay", icon: Smartphone },
-  { key: "bri", label: "Transfer BRI", icon: CreditCard },
+  { key: "seabank", label: "Transfer SeaBank", icon: CreditCard },
 ];
 const PAYMENT_ACCOUNTS = {
   dana: { number: "082322633452", owner: "Muh Agus", label: "Nomor Dana" },
   gopay: { number: "088242049163", owner: "PutriGmoyy", label: "Nomor GoPay" },
-  bri: { number: "1234-5678-9012", owner: "PutriStore", label: "Rekening BRI" },
+  seabank: { number: "9011-2345-6789", owner: "PutriStore", label: "Rekening SeaBank" },
 };
 const PAYMENT_INSTRUCTIONS = {
   qris: "Scan Qris berikut dan isi sesuai total pembayaran ( tidak boleh kurang).",
   dana: "Harap perhaikan nomor Dana dan atas nama penerima, Khusus Dana transfer wajib (+100 rupiah)",
   gopay: "Harap perhaikan nomor Gopay dan atas nama penerima,transfer tidak boleh kurang",
-  bri: "Transfer manual dengan berita acara ORDER + nama kamu.",
+  seabank: "Transfer SeaBank dengan berita acara ORDER + nama kamu.",
 };
 const PAYMENT_MEDIA = PAYMENT_METHODS.reduce((acc, method) => {
   acc[method.key] = resolveAssetPath(method.asset);

@@ -66,15 +66,20 @@ const PAYMENT_PROOF_EMAIL =
   "putristore.invoice@gmail.com";
 const PAYMENT_METHODS = [
   { key: "qris", label: "QRIS", icon: CreditCard, asset: "assets/payments/qris.svg" },
-  { key: "dana", label: "Dana", icon: Wallet, asset: "assets/payments/dana.svg" },
-  { key: "gopay", label: "GoPay", icon: Smartphone, asset: "assets/payments/gopay.svg" },
-  { key: "bri", label: "Transfer BRI", icon: CreditCard, asset: "assets/payments/bri.svg" },
+  { key: "dana", label: "Dana", icon: Wallet },
+  { key: "gopay", label: "GoPay", icon: Smartphone },
+  { key: "bri", label: "Transfer BRI", icon: CreditCard },
 ];
+const PAYMENT_ACCOUNTS = {
+  dana: { number: "0812-3456-7890", owner: "PutriStore", label: "Nomor Dana" },
+  gopay: { number: "0856-7890-1234", owner: "PutriStore", label: "Nomor GoPay" },
+  bri: { number: "1234-5678-9012", owner: "PutriStore", label: "Rekening BRI" },
+};
 const PAYMENT_INSTRUCTIONS = {
   qris: "Scan QRIS premium berikut menggunakan aplikasi bank/domisili favorit Anda.",
-  dana: "Kirim pembayaran ke akun Dana 08xx-xxxx-xxxx (PutriStore) dan sertakan catatan order ID.",
-  gopay: "Bayar via GoPay ke 08xx-xxxx-xxxx (PutriStore). Nominal harus sesuai total agar terverifikasi otomatis.",
-  bri: "Transfer manual ke rekening BRI 1234-5678-9012 a.n PutriStore, berita acara: ORDER + nama kamu.",
+  dana: "Pastikan nominal sesuai agar verifikasi otomatis.",
+  gopay: "Transfer via GoPay tepat sesuai jumlah total.",
+  bri: "Transfer manual dengan berita acara ORDER + nama kamu.",
 };
 const PAYMENT_MEDIA = PAYMENT_METHODS.reduce((acc, method) => {
   acc[method.key] = resolveAssetPath(method.asset);
@@ -239,6 +244,15 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
   const orderRef = useRef(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [touchStart, setTouchStart] = useState(null);
+  const handleCopy = async (text) => {
+    try {
+      await navigator.clipboard.writeText(String(text || ""));
+      setShowCopied(true);
+      setTimeout(() => setShowCopied(false), 2000);
+    } catch {
+      alert("Gagal menyalin nomor. Silakan salin manual.");
+    }
+  };
 
   const [allServices, setAllServices] = useState([]);
   const [servicesLoading, setServicesLoading] = useState(true);
@@ -272,6 +286,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
   const [error, setError] = useState("");
   const [orderTimestamp, setOrderTimestamp] = useState(null);
   const [receiptImage, setReceiptImage] = useState(null);
+  const [showCopied, setShowCopied] = useState(false);
   const [buttonGlowPhase, setButtonGlowPhase] = useState(0);
 
   const categoryCache = useRef({});
@@ -1128,7 +1143,10 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
               ))}
             </div>
 
-            <div className="rounded-2xl border border-purple-400/30 bg-black/30 p-4 flex flex-col gap-2">
+            <div
+              className="rounded-2xl border border-purple-400/30 bg-black/30 p-4 flex flex-col gap-2"
+              style={{ marginTop: "10%" }}
+            >
               <p className="text-sm text-white/60">Total Pembayaran</p>
               <p className="text-3xl font-bold">{formatIDR(livePaymentAmount)}</p>
               <p className="text-xs text-white/50">
@@ -1158,26 +1176,46 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
                   );
                 })}
               </div>
-              <div className="rounded-2xl border border-white/20 bg-black/30 p-4 text-sm text-white/70 space-y-3 text-center">
-                {PAYMENT_MEDIA[payment.method] ? (
-                  <img
-                    src={PAYMENT_MEDIA[payment.method]}
-                    alt={payment.method}
-                    className="mx-auto max-w-[320px] rounded-xl border border-white/10"
-                    onError={(e) => {
-                      e.currentTarget.style.display = "none";
-                    }}
-                  />
-                ) : (
-                  <p className="text-xs text-white/60">
-                    Letakkan gambar metode {PAYMENT_METHODS.find((m) => m.key === payment.method)?.label} di
-                    folder <code>public/assets/payments</code>.
-                  </p>
-                )}
-                <p className="text-xs text-white/60">
-                  {PAYMENT_INSTRUCTIONS[payment.method] || "Ikuti instruksi sesuai metode pembayaran yang dipilih."}
-                </p>
-              </div>
+              {payment.method === "qris" ? (
+                <div className="rounded-2xl border border-white/20 bg-black/30 p-4 text-sm text-white/70 space-y-3 text-center">
+                  {PAYMENT_MEDIA[payment.method] ? (
+                    <img
+                      src={PAYMENT_MEDIA[payment.method]}
+                      alt={payment.method}
+                      className="mx-auto max-w-[300px] rounded-xl border border-white/10"
+                    />
+                  ) : (
+                    <p className="text-xs text-white/60">
+                      Letakkan gambar QRIS pada <code>public/assets/payments/qris.svg</code>.
+                    </p>
+                  )}
+                  <p className="text-xs text-white/60">{PAYMENT_INSTRUCTIONS[payment.method]}</p>
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-white/20 bg-black/30 p-4 text-sm text-white/80 space-y-3">
+                  <div>
+                    <p className="text-white/50 text-xs uppercase tracking-wide">Nomor Rekening</p>
+                    <div className="mt-1 flex items-center justify-between gap-2 rounded-xl bg-white/10 px-4 py-2">
+                      <p className="font-semibold text-lg">{PAYMENT_ACCOUNTS[payment.method]?.number || "-"}</p>
+                      <button
+                        type="button"
+                        onClick={() => handleCopy(PAYMENT_ACCOUNTS[payment.method]?.number || "")}
+                        className="text-xs px-3 py-1 rounded-full bg-white/20 hover:bg-white/30 transition"
+                      >
+                        Salin
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-white/50 text-xs uppercase tracking-wide">Atas Nama</p>
+                    <p className="font-semibold text-white">{PAYMENT_ACCOUNTS[payment.method]?.owner || "-"}</p>
+                  </div>
+                  <p className="text-xs text-white/60">{PAYMENT_INSTRUCTIONS[payment.method]}</p>
+                  {showCopied && (
+                    <p className="text-emerald-300 text-xs text-right">Nomor rekening sudah disalin ke clipboard.</p>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="space-y-3">

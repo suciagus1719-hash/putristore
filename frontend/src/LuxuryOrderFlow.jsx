@@ -744,12 +744,35 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
     ctx.fillStyle = "#a78bfa";
     ctx.font = "16px 'Poppins', sans-serif";
     ctx.textBaseline = "alphabetic";
-    ctx.fillText("Terima kasih telah memesan layanan kami.", 120, 560);
+    const totalHeight = y - 180;
+    if (totalHeight > 350) {
+      const scale = Math.min(1, 350 / totalHeight);
+      ctx.save();
+      ctx.translate(90, 170);
+      ctx.scale(scale, scale);
+      ctx.translate(-90, -170);
 
-    ctx.font = "13px 'Poppins', sans-serif";
-    const watermark = "© PutriStore Premium Service";
-    const wmWidth = ctx.measureText(watermark).width;
-    ctx.fillText(watermark, canvas.width - wmWidth - 60, canvas.height - 30);
+      ctx.fillStyle = "#a78bfa";
+      ctx.font = "16px 'Poppins', sans-serif";
+      ctx.textBaseline = "alphabetic";
+      ctx.fillText("Terima kasih telah memesan layanan kami.", 120, 560);
+
+      ctx.font = "13px 'Poppins', sans-serif";
+      const watermark = "© PutriStore Premium Service";
+      const wmWidth = ctx.measureText(watermark).width;
+      ctx.fillText(watermark, canvas.width - wmWidth - 60, canvas.height - 30);
+      ctx.restore();
+    } else {
+      ctx.fillStyle = "#a78bfa";
+      ctx.font = "16px 'Poppins', sans-serif";
+      ctx.textBaseline = "alphabetic";
+      ctx.fillText("Terima kasih telah memesan layanan kami.", 120, 560);
+
+      ctx.font = "13px 'Poppins', sans-serif";
+      const watermark = "© PutriStore Premium Service";
+      const wmWidth = ctx.measureText(watermark).width;
+      ctx.fillText(watermark, canvas.width - wmWidth - 60, canvas.height - 30);
+    }
 
     setReceiptImage(canvas.toDataURL("image/png"));
   };

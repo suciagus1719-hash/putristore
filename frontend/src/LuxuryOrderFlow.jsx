@@ -649,10 +649,10 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
     ctx.fillRect(60, 60, 1080, 510);
 
     ctx.fillStyle = "#fff";
-    ctx.font = "bold 48px 'Poppins', sans-serif";
-    ctx.fillText("Struk Order Premium", 120, 140);
+    ctx.font = "bold 46px 'Poppins', sans-serif";
+    ctx.fillText("Struk Order Premium", 120, 120);
 
-    ctx.font = "24px 'Poppins', sans-serif";
+    ctx.font = "22px 'Poppins', sans-serif";
     ctx.textBaseline = "top";
     const orderCustomer = liveCustomer;
     const paymentLabel =
@@ -681,9 +681,9 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
 
     const labelX = 120;
     const valueX = 360;
-    const maxValueWidth = 650;
-    const lineHeight = 34;
-    let y = 200;
+    const maxValueWidth = 640;
+    const lineHeight = 32;
+    let y = 190;
 
     const wrapText = (text, startY) => {
       const content = String(text || "-").trim() || "-";
@@ -719,9 +719,12 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
     });
 
     ctx.fillStyle = "#a78bfa";
-    ctx.font = "20px 'Poppins', sans-serif";
+    ctx.font = "18px 'Poppins', sans-serif";
     ctx.textBaseline = "alphabetic";
     ctx.fillText("Terima kasih telah memesan layanan kami.", 120, 560);
+
+    ctx.font = "14px 'Poppins', sans-serif";
+    ctx.fillText("© PutriStore Premium Service", canvas.width - 320, canvas.height - 30);
 
     setReceiptImage(canvas.toDataURL("image/png"));
   };

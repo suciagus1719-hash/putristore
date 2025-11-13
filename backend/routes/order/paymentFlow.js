@@ -55,12 +55,89 @@ async function loadAllOrders() {
   return Promise.all(rows.map((order) => enforceReviewDeadline(order)));
 }
 
-// helper bikin ID
-const createOrderId = () => `ORD-${Date.now().toString(36).toUpperCase()}`;
 const toNum = (v) => {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 };
+
+function parseSnapshot(raw) {
+  if (!raw) return null;
+  if (typeof raw === "string") {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+  if (typeof raw === "object") return raw;
+  return null;
+}
+
+function normalizeOrderSnapshot(snapshot) {
+  if (!snapshot || typeof snapshot !== "object") return null;
+  const order_id = String(snapshot.order_id || "").trim();
+  if (!order_id) return null;
+  const nowIso = new Date().toISOString();
+  const customer = snapshot.customer || {};
+  const payment = snapshot.payment || {};
+  const price = snapshot.price || {};
+  const quantity = Number(snapshot.quantity) || 0;
+  const total = toNum(price.total ?? payment.amount ?? snapshot.total_price ?? snapshot.price_total);
+  return {
+    order_id,
+    service_id: String(snapshot.service_id || "").trim(),
+    service_name: snapshot.service_name ? String(snapshot.service_name).trim() : null,
+    platform: snapshot.platform ? String(snapshot.platform).trim() : null,
+    category: snapshot.category ? String(snapshot.category).trim() : null,
+    quantity,
+    target: String(snapshot.target || "").trim(),
+    customer: {
+      name: String(customer.name || "").trim(),
+      phone: String(customer.phone || "").trim(),
+      email: String(customer.email || "").trim(),
+    },
+    notes: snapshot.notes ? String(snapshot.notes).trim() : null,
+    status: snapshot.status || "pending_payment",
+    created_at: snapshot.created_at || nowIso,
+    hold_until: snapshot.hold_until || null,
+    review_deadline: snapshot.review_deadline || null,
+    price: {
+      unit: toNum(price.unit ?? snapshot.unit_price),
+      total,
+      currency: price.currency || "IDR",
+    },
+    payment: {
+      method: payment.method || null,
+      amount: toNum(payment.amount ?? total),
+      proof_url: payment.proof_url || null,
+      proof_status: payment.proof_status || "missing",
+      proof_channel: payment.proof_channel || "upload",
+      fallback_email: payment.fallback_email || PAYMENT_PROOF_EMAIL,
+      uploaded_at: payment.uploaded_at || null,
+      reported_at: payment.reported_at || null,
+      expires_at: payment.expires_at || snapshot.hold_until || null,
+      notes: payment.notes || null,
+    },
+    timeline: snapshot.timeline || {},
+    auto_cancelled: snapshot.auto_cancelled || false,
+    cancel_reason: snapshot.cancel_reason || null,
+  };
+}
+
+async function resolveOrder(orderId, snapshotRaw) {
+  if (!orderId) return null;
+  const existing = await loadOrder(orderId);
+  if (existing) return existing;
+  const normalized = normalizeOrderSnapshot(parseSnapshot(snapshotRaw));
+  if (normalized && normalized.order_id === orderId) {
+    await cacheOrder(normalized);
+    return normalized;
+  }
+  return null;
+}
+
+// helper bikin ID
+const createOrderId = () => `ORD-${Date.now().toString(36).toUpperCase()}`;
 
 // Env panel
 const PANEL_API_URL =
@@ -218,9 +295,10 @@ router.post("/order/payment-method", async (req, res) => {
     proof_channel = "upload",
     notes,
     fallback_email,
+    order_snapshot,
   } = req.body || {};
 
-  const order = await loadOrder(order_id);
+  const order = await resolveOrder(order_id, order_snapshot);
   if (!order) return res.status(404).json({ ok: false, message: "Order tidak ditemukan" });
   if (["cancelled", "rejected"].includes(order.status)) {
     return res.status(409).json({ ok: false, message: "Order sudah tidak aktif" });
@@ -263,8 +341,8 @@ router.post("/order/payment-method", async (req, res) => {
 
 // upload bukti transfer
 router.post("/order/upload-proof", upload.single("proof"), async (req, res) => {
-  const { order_id } = req.body || {};
-  const order = await loadOrder(order_id);
+  const { order_id, order_snapshot } = req.body || {};
+  const order = await resolveOrder(order_id, order_snapshot);
   if (!order) return res.status(404).json({ ok: false, message: "Order tidak ditemukan" });
   if (!req.file) return res.status(400).json({ ok: false, message: "Bukti wajib diupload" });
 

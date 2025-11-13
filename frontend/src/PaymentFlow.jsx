@@ -67,6 +67,7 @@ export default function PaymentFlow() {
           order_id: order.order_id,
           method: payment.method,
           amount: Number(payment.amount),
+          order_snapshot: order,
           proof_channel: proof ? "upload" : "email",
           fallback_email: PAYMENT_PROOF_EMAIL,
         }),
@@ -87,6 +88,9 @@ export default function PaymentFlow() {
       const form = new FormData();
       form.append("order_id", order.order_id);
       form.append("proof", proof);
+      if (order) {
+        form.append("order_snapshot", JSON.stringify(order));
+      }
       const data = await request("/api/order/upload-proof", {
         method: "POST",
         body: form,

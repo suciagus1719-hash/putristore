@@ -1,7 +1,5 @@
 const express = require("express");
 const multer = require("multer");
-const path = require("path");
-const fs = require("fs");
 const fetch = global.fetch || require("node-fetch");
 const applyCors = require("./cors");
 const { saveOrder, getOrder, listOrders } = require("./orderStore");
@@ -18,16 +16,11 @@ const PAYMENT_WINDOW_MINUTES = Math.max(Number(process.env.PAYMENT_WINDOW_MINUTE
 const PAYMENT_WINDOW_MS = PAYMENT_WINDOW_MINUTES * 60 * 1000;
 const PAYMENT_PROOF_EMAIL = process.env.PAYMENT_PROOF_EMAIL || process.env.ADMIN_EMAIL || null;
 
-// penyimpanan bukti (sementara ke folder uploads/bukti)
-const uploadDir = path.join(process.cwd(), "uploads/bukti");
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+// penyimpanan bukti (in-memory -> disimpan sebagai data URL pada order)
 const upload = multer({
-  dest: uploadDir,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 }, // max 5MB
 });
-
-// expose folder bukti agar bisa dilihat admin (gunakan CDN/storage permanen untuk produksi)
-router.use("/uploads/bukti", express.static(uploadDir));
 
 async function cacheOrder(order) {
   if (!order?.order_id) return;
@@ -276,8 +269,12 @@ router.post("/order/upload-proof", upload.single("proof"), async (req, res) => {
   if (!req.file) return res.status(400).json({ ok: false, message: "Bukti wajib diupload" });
 
   order.payment = order.payment || {};
-  const fileUrl = `/uploads/bukti/${req.file.filename}`;
-  order.payment.proof_url = fileUrl;
+  const mime = req.file.mimetype || "application/octet-stream";
+  const base64 = req.file.buffer?.toString("base64") || "";
+  order.payment.proof_url = base64 ? `data:${mime};base64,${base64}` : null;
+  order.payment.proof_file_name = req.file.originalname || null;
+  order.payment.proof_mime = mime;
+  order.payment.proof_size = req.file.size || null;
   order.payment.uploaded_at = new Date().toISOString();
   order.payment.proof_status = "uploaded";
   order.payment.proof_channel = "upload";

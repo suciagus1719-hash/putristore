@@ -114,12 +114,14 @@ export default function AdminPanel() {
           if (!order) return null;
           const payment = order.payment || {};
           const chip = statusChips[order.status] || "bg-white/10 text-white border border-white/20";
-          const proofUrl =
-            typeof payment.proof_url === "string"
-              ? payment.proof_url.startsWith("http")
-                ? payment.proof_url
-                : `${API_BASE}${payment.proof_url}`
-              : null;
+          const proofUrlRaw = typeof payment.proof_url === "string" ? payment.proof_url.trim() : "";
+          const proofUrl = proofUrlRaw
+            ? proofUrlRaw.startsWith("data:")
+              ? proofUrlRaw
+              : proofUrlRaw.startsWith("http")
+              ? proofUrlRaw
+              : `${API_BASE}${proofUrlRaw.startsWith("/") ? "" : "/"}${proofUrlRaw}`
+            : null;
           return (
             <div key={order.order_id} className="bg-white/10 rounded-2xl p-5 space-y-4 border border-white/10">
               <div className="flex flex-wrap items-start justify-between gap-3">

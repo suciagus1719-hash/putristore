@@ -11,6 +11,18 @@ const PAYMENT_OPTIONS = [
   { value: "gopay", label: "GoPay" },
   { value: "bri", label: "Transfer BRI" },
 ];
+const encodeSnapshot = (payload) => {
+  if (!payload) return "";
+  try {
+    const json = JSON.stringify(payload);
+    if (typeof window !== "undefined" && typeof window.btoa === "function") {
+      return window.btoa(unescape(encodeURIComponent(json)));
+    }
+    return json;
+  } catch {
+    return "";
+  }
+};
 
 export default function PaymentFlow() {
   const [step, setStep] = useState(1);
@@ -60,6 +72,7 @@ export default function PaymentFlow() {
     setError("");
     setLoading(true);
     try {
+      const snapshotPayload = encodeSnapshot(order);
       const data = await request("/api/order/payment-method", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -67,7 +80,7 @@ export default function PaymentFlow() {
           order_id: order.order_id,
           method: payment.method,
           amount: Number(payment.amount),
-          order_snapshot: order,
+          order_snapshot: snapshotPayload || order,
           proof_channel: proof ? "upload" : "email",
           fallback_email: PAYMENT_PROOF_EMAIL,
         }),
@@ -88,6 +101,12 @@ export default function PaymentFlow() {
       const form = new FormData();
       form.append("order_id", order.order_id);
       form.append("proof", proof);
+      const snapshotPayload = encodeSnapshot(order);
+      if (snapshotPayload) {
+        form.append("order_snapshot", snapshotPayload);
+      } else if (order) {
+        form.append("order_snapshot", JSON.stringify(order));
+      }
       if (order) {
         form.append("order_snapshot", JSON.stringify(order));
       }

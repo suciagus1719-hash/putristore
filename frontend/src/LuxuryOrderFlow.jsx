@@ -68,6 +68,18 @@ const PAYMENT_MEDIA = PAYMENT_METHODS.reduce((acc, method) => {
   acc[method.key] = resolveAssetPath(method.asset);
   return acc;
 }, {});
+const encodeSnapshot = (payload) => {
+  if (!payload) return "";
+  try {
+    const json = JSON.stringify(payload);
+    if (typeof window !== "undefined" && typeof window.btoa === "function") {
+      return window.btoa(unescape(encodeURIComponent(json)));
+    }
+    return json;
+  } catch {
+    return "";
+  }
+};
 
 const PLATFORM_CARDS = [
   { key: "Instagram", label: "Instagram", accent: "from-pink-500 to-amber-400", icon: Instagram },
@@ -524,6 +536,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
     }
 
     const wantsUpload = Boolean(proof);
+    const snapshotPayload = encodeSnapshot(order);
     if (!wantsUpload) {
       const confirmed = window.confirm(
         "Belum ada bukti transfer yang diunggah. Lanjutkan dan kirim bukti melalui email/WhatsApp?"
@@ -540,7 +553,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
         proof_channel: wantsUpload ? "upload" : "email",
         fallback_email: PAYMENT_PROOF_EMAIL,
         notes: payment.notes?.trim() || "",
-        order_snapshot: order,
+        order_snapshot: snapshotPayload || order,
       };
       let updatedOrder = (
         await request("/api/order/payment-method", {
@@ -554,7 +567,9 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
         const form = new FormData();
         form.append("order_id", order.order_id);
         form.append("proof", proof);
-        if (order) {
+        if (snapshotPayload) {
+          form.append("order_snapshot", snapshotPayload);
+        } else if (order) {
           form.append("order_snapshot", JSON.stringify(order));
         }
         const uploadResult = await request("/api/order/upload-proof", {

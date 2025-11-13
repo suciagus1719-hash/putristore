@@ -60,11 +60,26 @@ const toNum = (v) => {
   return Number.isFinite(n) ? n : null;
 };
 
+function decodeMaybeBase64(value) {
+  if (typeof value !== "string") return value;
+  const trimmed = value.trim();
+  if (!trimmed) return trimmed;
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) return value;
+  try {
+    const buffer = Buffer.from(trimmed, "base64");
+    const decoded = buffer.toString("utf8");
+    return decoded;
+  } catch {
+    return value;
+  }
+}
+
 function parseSnapshot(raw) {
   if (!raw) return null;
   if (typeof raw === "string") {
+    const candidate = decodeMaybeBase64(raw);
     try {
-      return JSON.parse(raw);
+      return JSON.parse(candidate);
     } catch {
       return null;
     }
@@ -73,9 +88,9 @@ function parseSnapshot(raw) {
   return null;
 }
 
-function normalizeOrderSnapshot(snapshot) {
+function normalizeOrderSnapshot(snapshot, fallbackOrderId) {
   if (!snapshot || typeof snapshot !== "object") return null;
-  const order_id = String(snapshot.order_id || "").trim();
+  const order_id = String(snapshot.order_id || fallbackOrderId || "").trim();
   if (!order_id) return null;
   const nowIso = new Date().toISOString();
   const customer = snapshot.customer || {};
@@ -125,15 +140,13 @@ function normalizeOrderSnapshot(snapshot) {
 }
 
 async function resolveOrder(orderId, snapshotRaw) {
-  if (!orderId) return null;
-  const existing = await loadOrder(orderId);
-  if (existing) return existing;
-  const normalized = normalizeOrderSnapshot(parseSnapshot(snapshotRaw));
-  if (normalized && normalized.order_id === orderId) {
+  const normalized = normalizeOrderSnapshot(parseSnapshot(snapshotRaw), orderId);
+  if (normalized) {
     await cacheOrder(normalized);
     return normalized;
   }
-  return null;
+  if (!orderId) return null;
+  return loadOrder(orderId);
 }
 
 // helper bikin ID

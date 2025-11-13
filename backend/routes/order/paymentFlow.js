@@ -139,8 +139,10 @@ function normalizeOrderSnapshot(snapshot, fallbackOrderId) {
   };
 }
 
-async function resolveOrder(orderId, snapshotRaw) {
-  const normalized = normalizeOrderSnapshot(parseSnapshot(snapshotRaw), orderId);
+async function resolveOrder(orderId, snapshotRaw, payloadRaw) {
+  const primary = parseSnapshot(snapshotRaw);
+  const fallbackPayload = primary || parseSnapshot(payloadRaw);
+  const normalized = normalizeOrderSnapshot(primary || fallbackPayload, orderId);
   if (normalized) {
     await cacheOrder(normalized);
     return normalized;
@@ -309,9 +311,10 @@ router.post("/order/payment-method", async (req, res) => {
     notes,
     fallback_email,
     order_snapshot,
+    order_payload,
   } = req.body || {};
 
-  const order = await resolveOrder(order_id, order_snapshot);
+  const order = await resolveOrder(order_id, order_snapshot, order_payload);
   if (!order) return res.status(404).json({ ok: false, message: "Order tidak ditemukan" });
   if (["cancelled", "rejected"].includes(order.status)) {
     return res.status(409).json({ ok: false, message: "Order sudah tidak aktif" });
@@ -354,8 +357,8 @@ router.post("/order/payment-method", async (req, res) => {
 
 // upload bukti transfer
 router.post("/order/upload-proof", upload.single("proof"), async (req, res) => {
-  const { order_id, order_snapshot } = req.body || {};
-  const order = await resolveOrder(order_id, order_snapshot);
+  const { order_id, order_snapshot, order_payload } = req.body || {};
+  const order = await resolveOrder(order_id, order_snapshot, order_payload);
   if (!order) return res.status(404).json({ ok: false, message: "Order tidak ditemukan" });
   if (!req.file) return res.status(400).json({ ok: false, message: "Bukti wajib diupload" });
 

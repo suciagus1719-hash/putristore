@@ -554,6 +554,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
         fallback_email: PAYMENT_PROOF_EMAIL,
         notes: payment.notes?.trim() || "",
         order_snapshot: snapshotPayload || order,
+        order_payload: order,
       };
       let updatedOrder = (
         await request("/api/order/payment-method", {
@@ -572,6 +573,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
         } else if (order) {
           form.append("order_snapshot", JSON.stringify(order));
         }
+        form.append("order_payload", JSON.stringify(order));
         const uploadResult = await request("/api/order/upload-proof", {
           method: "POST",
           body: form,

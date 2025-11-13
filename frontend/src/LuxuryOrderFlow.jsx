@@ -61,7 +61,13 @@ const BRAND_BADGE_CANDIDATES = [
 ];
 const BRAND_BADGE_URL =
   BRAND_BADGE_CANDIDATES.map(resolveAssetPath).find((src) => typeof src === "string" && src.length) || "";
-const QRIS_IMAGE_URL = "https://i.imgur.com/lQjQpMZ.png"; // ganti dengan QRIS asli
+const PAYMENT_PROOF_EMAIL =
+  (import.meta?.env?.VITE_PAYMENT_EMAIL && import.meta.env.VITE_PAYMENT_EMAIL.trim()) ||
+  "putristore.invoice@gmail.com";
+const PAYMENT_MEDIA = PAYMENT_METHODS.reduce((acc, method) => {
+  acc[method.key] = resolveAssetPath(method.asset);
+  return acc;
+}, {});
 
 const PLATFORM_CARDS = [
   { key: "Instagram", label: "Instagram", accent: "from-pink-500 to-amber-400", icon: Instagram },
@@ -119,11 +125,17 @@ const FALLBACK_CATEGORIES = [
 ];
 
 const PAYMENT_METHODS = [
-  { key: "qris", label: "QRIS", icon: CreditCard },
-  { key: "dana", label: "Dana", icon: Wallet },
-  { key: "ovo", label: "OVO", icon: Smartphone },
-  { key: "bri", label: "Transfer BRI", icon: CreditCard },
+  { key: "qris", label: "QRIS", icon: CreditCard, asset: "assets/payments/qris.svg" },
+  { key: "dana", label: "Dana", icon: Wallet, asset: "assets/payments/dana.svg" },
+  { key: "gopay", label: "GoPay", icon: Smartphone, asset: "assets/payments/gopay.svg" },
+  { key: "bri", label: "Transfer BRI", icon: CreditCard, asset: "assets/payments/bri.svg" },
 ];
+const PAYMENT_INSTRUCTIONS = {
+  qris: "Scan QRIS premium berikut menggunakan aplikasi bank/domisili favorit Anda.",
+  dana: "Kirim pembayaran ke akun Dana 08xx-xxxx-xxxx (PutriStore) dan sertakan catatan order ID.",
+  gopay: "Bayar via GoPay ke 08xx-xxxx-xxxx (PutriStore). Nominal harus sesuai total agar terverifikasi otomatis.",
+  bri: "Transfer manual ke rekening BRI 1234-5678-9012 a.n PutriStore, berita acara: ORDER + nama kamu.",
+};
 
 const DEFAULT_QUANTITY = 100;
 const createEmptyCustomer = () => ({ name: "", phone: "", email: "" });
@@ -242,7 +254,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
   const [target, setTarget] = useState("");
   const [customer, setCustomer] = useState(createEmptyCustomer);
   const [step, setStep] = useState(1);
-  const [payment, setPayment] = useState({ method: "qris", amount: 0 });
+  const [payment, setPayment] = useState({ method: "qris", amount: 0, notes: "" });
   const [proof, setProof] = useState(null);
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -261,7 +273,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
     setQuantity(DEFAULT_QUANTITY);
     setTarget("");
     setCustomer(createEmptyCustomer());
-    setPayment((prev) => ({ ...prev, amount: 0 }));
+    setPayment((prev) => ({ ...prev, amount: 0, notes: "" }));
     setProof(null);
     setOrder(null);
     setStep(1);
@@ -464,15 +476,25 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
     }
     setLoading(true);
     try {
+      const normalizedQuantity = Number(quantity);
+      const totalCharge = Number(pricePreview) || 0;
+      const perUnit = normalizedQuantity > 0 ? totalCharge / normalizedQuantity : null;
+      const cleanedTarget = target.trim();
       const payload = {
         service_id: serviceId,
-        quantity: Number(quantity),
-        target: target.trim(),
+        quantity: normalizedQuantity,
+        target: cleanedTarget,
         customer: {
           name: customer.name?.trim() || "",
           phone: customer.phone?.trim() || "",
           email: customer.email?.trim() || "",
         },
+        platform: selectedPlatform,
+        category: selectedCategory,
+        service_name: selectedService?.name || "",
+        unit_price: perUnit,
+        price_total: totalCharge,
+        payment_email: PAYMENT_PROOF_EMAIL,
       };
       const data = await request("/api/order/checkout", {
         method: "POST",
@@ -480,8 +502,8 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
         body: JSON.stringify(payload),
       });
       setOrder(data.order);
-      setOrderTimestamp(new Date());
-      setPayment((prev) => ({ ...prev, amount: pricePreview || prev.amount }));
+      setOrderTimestamp(new Date(data.order?.created_at || Date.now()));
+      setPayment((prev) => ({ ...prev, amount: totalCharge || prev.amount }));
       setStep(2);
     } catch (err) {
       setError(err.message);
@@ -492,31 +514,57 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
 
   const handlePaymentMethod = async () => {
     setError("");
-    if (!proof) {
-      setError("Upload bukti pembayaran terlebih dahulu.");
+    if (!order?.order_id) {
+      setError("Order belum dibuat.");
       return;
     }
+    if (!payment.method) {
+      setError("Pilih metode pembayaran terlebih dahulu.");
+      return;
+    }
+
+    const wantsUpload = Boolean(proof);
+    if (!wantsUpload) {
+      const confirmed = window.confirm(
+        "Belum ada bukti transfer yang diunggah. Lanjutkan dan kirim bukti melalui email/WhatsApp?"
+      );
+      if (!confirmed) return;
+    }
+
     setLoading(true);
     try {
-      await request("/api/order/payment-method", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          order_id: order.order_id,
-          method: payment.method,
-          amount: payment.amount || pricePreview,
-        }),
-      });
+      const paymentPayload = {
+        order_id: order.order_id,
+        method: payment.method,
+        amount: payment.amount || pricePreview,
+        proof_channel: wantsUpload ? "upload" : "email",
+        fallback_email: PAYMENT_PROOF_EMAIL,
+        notes: payment.notes?.trim() || "",
+      };
+      let updatedOrder = (
+        await request("/api/order/payment-method", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(paymentPayload),
+        })
+      ).order;
 
-      const form = new FormData();
-      form.append("order_id", order.order_id);
-      form.append("proof", proof);
-      const data = await request("/api/order/upload-proof", {
-        method: "POST",
-        body: form,
-      });
-      setOrder(data.order);
-      setStep(4);
+      if (wantsUpload && proof) {
+        const form = new FormData();
+        form.append("order_id", order.order_id);
+        form.append("proof", proof);
+        const uploadResult = await request("/api/order/upload-proof", {
+          method: "POST",
+          body: form,
+        });
+        updatedOrder = uploadResult.order;
+      }
+
+      setOrder(updatedOrder);
+      if (updatedOrder?.created_at) {
+        setOrderTimestamp(new Date(updatedOrder.created_at));
+      }
+      setStep(3);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -532,7 +580,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
     setTarget("");
     setCustomer(createEmptyCustomer());
     const base = (Number(srv.rate_per_1k) / 1000) * min;
-    setPayment((prev) => ({ ...prev, amount: applyMarkup(base) }));
+    setPayment((prev) => ({ ...prev, amount: applyMarkup(base), notes: "" }));
     setProof(null);
     setOrder(null);
     setOrderTimestamp(null);
@@ -581,15 +629,22 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
     ctx.fillText("Struk Order Premium", 120, 140);
 
     ctx.font = "24px 'Poppins', sans-serif";
+    const orderCustomer = liveCustomer;
+    const paymentLabel =
+      PAYMENT_METHODS.find((m) => m.key === (order.payment?.method || payment.method))?.label || "-";
+    const nominal = order.payment?.amount ?? payment.amount ?? pricePreview;
     const details = [
-      [`Order ID`, order.order_id],
-      ["Layanan", `${selectedService?.name || order.service_id} (${order.service_id})`],
+      ["Order ID", order.order_id],
+      ["Platform", order.platform || selectedPlatform || "-"],
+      ["Kategori", order.category || selectedCategory || "-"],
+      ["Layanan", `${order.service_name || selectedService?.name || "-"} (${order.service_id})`],
       ["Target", order.target],
       ["Quantity", order.quantity],
-      ["Nama", customer.name || "-"],
-      ["No. WhatsApp", customer.phone || "-"],
-      ["Email", customer.email || "-"],
-      ["Nominal", formatIDR(payment.amount || pricePreview)],
+      ["Nama", orderCustomer?.name || "-"],
+      ["No. WhatsApp", orderCustomer?.phone || "-"],
+      ["Email", orderCustomer?.email || "-"],
+      ["Metode Bayar", paymentLabel],
+      ["Nominal", formatIDR(nominal)],
       ["Tanggal", formatWitaDate(orderTimestamp)],
       ["Jam (WITA)", formatWitaTime(orderTimestamp)],
     ];
@@ -611,11 +666,17 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
   };
 
   useEffect(() => {
-    if (step === 4 && order) {
+    if (step >= 3 && order) {
       generateReceiptImage();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, order]);
+
+  useEffect(() => {
+    if (step === 1) {
+      setPayment((prev) => ({ ...prev, amount: pricePreview }));
+    }
+  }, [pricePreview, step]);
 
   const menuItems = [
     {
@@ -667,7 +728,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
   const resetFlow = () => {
     setStep(1);
     setOrder(null);
-    setPayment({ method: "qris", amount: 0 });
+    setPayment({ method: "qris", amount: 0, notes: "" });
     setProof(null);
     setTarget("");
     setQuantity(100);
@@ -679,6 +740,12 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
       <span className="text-white/60">{n}.</span> {title}
     </h2>
   );
+
+  const liveCustomer = order?.customer || customer;
+  const livePlatform = order?.platform || selectedPlatform || "-";
+  const liveCategory = order?.category || selectedCategory || "-";
+  const liveServiceName = order?.service_name || selectedService?.name || "-";
+  const livePaymentAmount = order?.payment?.amount ?? payment.amount ?? pricePreview;
 
   const handleTouchStart = (e) => setTouchStart(e.touches[0].clientX);
   const handleTouchEnd = (e) => {
@@ -966,41 +1033,36 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
           <section className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur p-6 space-y-6">
             {renderStepTitle("2", "Konfirmasi Pembayaran")}
             <div className="grid sm:grid-cols-2 gap-4 text-sm text-white/80">
-              <div>
-                <p className="text-white/50">Order ID</p>
-                <p className="font-semibold">{order.order_id}</p>
-              </div>
-              <div>
-                <p className="text-white/50">ID Layanan</p>
-                <p>{order.service_id}</p>
-              </div>
-              <div>
-                <p className="text-white/50">Nama</p>
-                <p>{customer.name || "-"}</p>
-              </div>
-              <div>
-                <p className="text-white/50">Nomor WhatsApp</p>
-                <p>{customer.phone || "-"}</p>
-              </div>
-              <div>
-                <p className="text-white/50">Email</p>
-                <p>{customer.email || "-"}</p>
-              </div>
-              <div>
-                <p className="text-white/50">Jam Order (WITA)</p>
-                <p>{formatWitaTime(orderTimestamp)}</p>
-              </div>
-              <div>
-                <p className="text-white/50">Tanggal Order</p>
-                <p>{formatWitaDate(orderTimestamp)}</p>
-              </div>
-              <div>
-                <p className="text-white/50">Nominal</p>
-                <p className="text-lg font-semibold">{formatIDR(payment.amount || pricePreview)}</p>
-              </div>
+              {[
+                { label: "Order ID", value: order.order_id },
+                { label: "ID Layanan", value: order.service_id },
+                { label: "Nama Layanan", value: liveServiceName },
+                { label: "Platform", value: livePlatform },
+                { label: "Kategori", value: liveCategory },
+                { label: "Jumlah Order", value: order.quantity?.toLocaleString("id-ID") },
+                { label: "Target", value: order.target, span: true },
+                { label: "Nama Pemesan", value: liveCustomer?.name || "-" },
+                { label: "Nomor WhatsApp", value: liveCustomer?.phone || "-" },
+                { label: "Email", value: liveCustomer?.email || "-" },
+                { label: "Tanggal Order", value: orderTimestamp ? formatWitaDate(orderTimestamp) : "-" },
+                { label: "Jam Order (WITA)", value: orderTimestamp ? formatWitaTime(orderTimestamp) : "-" },
+              ].map((item) => (
+                <div key={`${item.label}-${item.value}`} className={item.span ? "sm:col-span-2" : ""}>
+                  <p className="text-white/50">{item.label}</p>
+                  <p className="font-semibold break-words">{item.value}</p>
+                </div>
+              ))}
             </div>
 
-            <div className="space-y-3">
+            <div className="rounded-2xl border border-purple-400/30 bg-black/30 p-4 flex flex-col gap-2">
+              <p className="text-sm text-white/60">Total Pembayaran</p>
+              <p className="text-3xl font-bold">{formatIDR(livePaymentAmount)}</p>
+              <p className="text-xs text-white/50">
+                Jumlah ini otomatis mengikuti input jumlah yang kamu masukkan di langkah sebelumnya.
+              </p>
+            </div>
+
+            <div className="space-y-4">
               <p className="text-sm text-white/70">Pilih Metode Pembayaran</p>
               <div className="grid sm:grid-cols-4 gap-3">
                 {PAYMENT_METHODS.map((method) => {
@@ -1022,37 +1084,41 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
                   );
                 })}
               </div>
-
-              {payment.method === "qris" && (
-                <div className="rounded-2xl border border-white/20 bg-black/30 p-4 text-center">
-                  <p className="text-sm text-white/70 mb-2">Scan QRIS berikut:</p>
+              <div className="rounded-2xl border border-white/20 bg-black/30 p-4 text-sm text-white/70 space-y-3 text-center">
+                {PAYMENT_MEDIA[payment.method] ? (
                   <img
-                    src={QRIS_IMAGE_URL}
-                    alt="QRIS"
-                    className="mx-auto max-w-[280px] rounded-xl border border-white/10"
+                    src={PAYMENT_MEDIA[payment.method]}
+                    alt={payment.method}
+                    className="mx-auto max-w-[320px] rounded-xl border border-white/10"
+                    onError={(e) => {
+                      e.currentTarget.style.display = "none";
+                    }}
                   />
-                </div>
-              )}
-              {payment.method === "dana" && (
-                <div className="rounded-2xl border border-white/20 bg-black/30 p-4 text-sm text-white/70">
-                  Kirim pembayaran ke akun Dana: <span className="text-white">08xx-xxxx-xxxx (Putri)</span>
-                </div>
-              )}
-              {payment.method === "ovo" && (
-                <div className="rounded-2xl border border-white/20 bg-black/30 p-4 text-sm text-white/70">
-                  Kirim pembayaran ke akun OVO: <span className="text-white">08xx-xxxx-xxxx (Putri)</span>
-                </div>
-              )}
-              {payment.method === "bri" && (
-                <div className="rounded-2xl border border-white/20 bg-black/30 p-4 text-sm text-white/70">
-                  Transfer ke rek. BRI <span className="text-white">1234-5678-90 a.n Putri Store</span>
-                </div>
-              )}
+                ) : (
+                  <p className="text-xs text-white/60">
+                    Letakkan gambar metode {PAYMENT_METHODS.find((m) => m.key === payment.method)?.label} di
+                    folder <code>public/assets/payments</code>.
+                  </p>
+                )}
+                <p className="text-xs text-white/60">
+                  {PAYMENT_INSTRUCTIONS[payment.method] || "Ikuti instruksi sesuai metode pembayaran yang dipilih."}
+                </p>
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-sm text-white/80 space-y-1 block">
-                Upload Bukti Pembayaran
+            <div className="space-y-3">
+              <label className="text-sm text-white/80 space-y-2 block">
+                Catatan Pembayaran (opsional)
+                <textarea
+                  className="w-full rounded-2xl border border-white/10 bg-white/5 p-3 text-white/80"
+                  rows={2}
+                  placeholder="Contoh: transfer dari rekening BRI kakak / bukti saya kirim via email."
+                  value={payment.notes}
+                  onChange={(e) => setPayment((prev) => ({ ...prev, notes: e.target.value }))}
+                />
+              </label>
+              <label className="text-sm text-white/80 space-y-2 block">
+                Upload Bukti Pembayaran (opsional)
                 <div className="rounded-2xl border border-dashed border-white/30 bg-white/5 px-4 py-6 text-center text-sm text-white/70">
                   <Images className="w-6 h-6 mx-auto mb-2" />
                   <input
@@ -1063,20 +1129,58 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
                   />
                 </div>
               </label>
+              <p className="text-xs text-white/60">
+                Jika terkendala upload, kirim bukti via email{" "}
+                <a
+                  href={`mailto:${PAYMENT_PROOF_EMAIL}?subject=Bukti%20Transfer%20${encodeURIComponent(order.order_id)}`}
+                  className="text-white underline"
+                >
+                  {PAYMENT_PROOF_EMAIL}
+                </a>{" "}
+                atau WhatsApp admin, lalu klik tombol di bawah.
+              </p>
               <button
                 onClick={handlePaymentMethod}
-                disabled={!proof}
+                disabled={loading}
                 className="w-full rounded-2xl bg-green-500 py-3 font-semibold disabled:opacity-50"
               >
-                Saya sudah membayar
+                {loading ? "Mengirim..." : "Saya sudah bayar"}
               </button>
+              <p className="text-xs text-white/50 text-center">
+                Data order akan tertahan di admin selama maksimal 1x24 jam untuk diverifikasi sebelum otomatis
+                dibatalkan.
+              </p>
             </div>
           </section>
         )}
 
-        {step === 4 && order && (
+        {step === 3 && order && (
           <section className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur p-6 space-y-4">
             {renderStepTitle("3", "Struk Menunggu Konfirmasi")}
+            <div className="rounded-2xl border border-white/10 bg-black/30 p-4 text-sm text-white/70 space-y-1">
+              <p className="text-white/50">Status saat ini</p>
+              <p className="text-lg font-semibold capitalize">{String(order.status || "waiting_review").replace(/_/g, " ")}</p>
+              <p>
+                Tenggat verifikasi:{" "}
+                {order.review_deadline
+                  ? `${formatWitaDate(new Date(order.review_deadline))} • ${formatWitaTime(
+                      new Date(order.review_deadline)
+                    )}`
+                  : "Menunggu admin"}
+              </p>
+              <p>
+                Bukti bayar:{" "}
+                {order.payment?.proof_status === "uploaded"
+                  ? "Sudah diterima"
+                  : order.payment?.proof_status === "awaiting_email"
+                  ? "Menunggu bukti via email"
+                  : "Belum ada"}
+              </p>
+              <p className="text-xs text-white/50">
+                Admin akan memeriksa dalam 1x24 jam. Jika tidak ada respon, order dibatalkan otomatis & dana bisa
+                direfund.
+              </p>
+            </div>
             {receiptImage ? (
               <img
                 src={receiptImage}
@@ -1084,7 +1188,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
                 className="w-full rounded-2xl border border-white/20"
               />
             ) : (
-              <div className="text-sm text-white/70">Sedang membuat gambar struk?</div>
+              <div className="text-sm text-white/70">Sedang membuat gambar struk...</div>
             )}
             {receiptImage && (
               <a
@@ -1101,7 +1205,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
                 onClick={() => window.open(WHATSAPP_GROUP_LINK, "_blank")}
                 className="rounded-2xl bg-[#25D366] py-3 font-semibold"
               >
-                Gabung ke Grup WhatsApp
+                Lanjut ke Grup WhatsApp
               </button>
               <button
                 onClick={handleStatusCheck}
@@ -1111,6 +1215,10 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
                 Status Order
               </button>
             </div>
+            <p className="text-xs text-white/60">
+              Setelah pembayaran disetujui, order langsung diteruskan ke panel otomatis. Klik tombol WhatsApp untuk
+              klaim garansi atau update antrian.
+            </p>
             <button
               onClick={resetFlow}
               className="w-full rounded-2xl bg-white/10 border border-white/20 py-3 text-sm text-white/80"
@@ -1123,10 +1231,3 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
     </div>
   );
 }
-
-
-
-
-
-
-

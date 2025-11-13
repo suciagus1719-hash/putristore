@@ -2,6 +2,15 @@ import React, { useState } from "react";
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://putristore-backend.vercel.app";
 const WHATSAPP_GROUP_LINK = "https://chat.whatsapp.com/link-grup-kamu";
+const PAYMENT_PROOF_EMAIL =
+  (import.meta.env?.VITE_PAYMENT_EMAIL && import.meta.env.VITE_PAYMENT_EMAIL.trim()) ||
+  "putristore.invoice@gmail.com";
+const PAYMENT_OPTIONS = [
+  { value: "qris", label: "QRIS" },
+  { value: "dana", label: "Dana" },
+  { value: "gopay", label: "GoPay" },
+  { value: "bri", label: "Transfer BRI" },
+];
 
 export default function PaymentFlow() {
   const [step, setStep] = useState(1);
@@ -31,6 +40,7 @@ export default function PaymentFlow() {
         quantity: Number(quantity),
         target,
         customer,
+        payment_email: PAYMENT_PROOF_EMAIL,
       };
       const data = await request("/api/order/checkout", {
         method: "POST",
@@ -57,6 +67,8 @@ export default function PaymentFlow() {
           order_id: order.order_id,
           method: payment.method,
           amount: Number(payment.amount),
+          proof_channel: proof ? "upload" : "email",
+          fallback_email: PAYMENT_PROOF_EMAIL,
         }),
       });
       setOrder(data.order);
@@ -149,8 +161,11 @@ export default function PaymentFlow() {
               value={payment.method}
               onChange={(e) => setPayment((p) => ({ ...p, method: e.target.value }))}
             >
-              <option value="qris">QRIS</option>
-              <option value="transfer">Transfer Bank</option>
+              {PAYMENT_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
             </select>
             <input
               className="w-full p-3 rounded-lg bg-black/40"
@@ -159,9 +174,12 @@ export default function PaymentFlow() {
               value={payment.amount}
               onChange={(e) => setPayment((p) => ({ ...p, amount: e.target.value }))}
             />
-            <div className="bg-black/40 rounded-lg p-3 text-sm">
+            <div className="bg-black/40 rounded-lg p-3 text-sm space-y-1">
               Order ID: {order.order_id} <br />
-              Batas bayar: {new Date(order.payment.expires_at).toLocaleString()}
+              Batas bayar: {order.payment.expires_at ? new Date(order.payment.expires_at).toLocaleString() : "-"}
+              <p className="text-white/60 text-xs">
+                Setelah tombol di bawah ditekan, order akan menunggu persetujuan admin maksimal 1x24 jam.
+              </p>
             </div>
             <button
               disabled={loading}
@@ -189,6 +207,13 @@ export default function PaymentFlow() {
             >
               {loading ? "Mengunggah..." : "Upload & Lanjutkan"}
             </button>
+            <button
+              disabled={loading}
+              onClick={() => setStep(4)}
+              className="w-full bg-white/10 p-3 rounded-xl text-sm"
+            >
+              Lewati dulu, saya kirim via email ({PAYMENT_PROOF_EMAIL})
+            </button>
           </section>
         )}
 
@@ -201,7 +226,9 @@ export default function PaymentFlow() {
               <p>Layanan: {order.service_id}</p>
               <p>Quantity: {order.quantity}</p>
               <p>Target: {order.target}</p>
-              <p>Nominal: Rp {order.payment.amount?.toLocaleString("id-ID")}</p>
+              <p>Nominal: Rp {order.payment?.amount?.toLocaleString("id-ID")}</p>
+              <p>Bukti: {order.payment?.proof_status || "menunggu"}</p>
+              <p>Batas review: {order.review_deadline ? new Date(order.review_deadline).toLocaleString() : "-"}</p>
             </div>
             <button
               onClick={() => window.open(WHATSAPP_GROUP_LINK, "_blank")}
@@ -209,6 +236,9 @@ export default function PaymentFlow() {
             >
               Gabung ke Grup WhatsApp
             </button>
+            <p className="text-xs text-white/60">
+              Struk ini bisa digunakan untuk klaim garansi atau lapor kendala melalui grup WhatsApp resmi kami.
+            </p>
           </section>
         )}
       </main>

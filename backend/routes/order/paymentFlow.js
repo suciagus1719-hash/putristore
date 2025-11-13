@@ -1,23 +1,22 @@
-﻿const express = require("express");
+const express = require("express");
 const multer = require("multer");
-const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "https://suciagus1719-hash.github.io";
 const path = require("path");
 const fs = require("fs");
 const fetch = global.fetch || require("node-fetch");
+const applyCors = require("./cors");
 const { saveOrder, getOrder, listOrders } = require("./orderStore");
 
 const router = express.Router();
 
 router.use((req, res, next) => {
-  res.setHeader("Access-Control-Allow-Origin", FRONTEND_ORIGIN);
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader(
-    "Access-Control-Allow-Headers",
-    "Content-Type, Authorization, X-Admin-Key"
-  );
-  if (req.method === "OPTIONS") return res.status(204).end();
+  if (applyCors(req, res)) return;
   next();
 });
+
+const REVIEW_DEADLINE_MS = 24 * 60 * 60 * 1000; // 1x24 jam
+const PAYMENT_WINDOW_MINUTES = Math.max(Number(process.env.PAYMENT_WINDOW_MINUTES || 30), 5);
+const PAYMENT_WINDOW_MS = PAYMENT_WINDOW_MINUTES * 60 * 1000;
+const PAYMENT_PROOF_EMAIL = process.env.PAYMENT_PROOF_EMAIL || process.env.ADMIN_EMAIL || null;
 
 // penyimpanan bukti (sementara ke folder uploads/bukti)
 const uploadDir = path.join(process.cwd(), "uploads/bukti");
@@ -35,9 +34,32 @@ async function cacheOrder(order) {
   await saveOrder(order);
 }
 
+async function enforceReviewDeadline(order) {
+  if (!order) return null;
+  if (
+    ["waiting_review", "waiting_payment_proof"].includes(order.status) &&
+    order.review_deadline &&
+    Date.now() > Date.parse(order.review_deadline)
+  ) {
+    order.status = "cancelled";
+    order.auto_cancelled = true;
+    order.cancel_reason = "review_timeout";
+    order.cancelled_at = new Date().toISOString();
+    order.review_deadline = null;
+    await cacheOrder(order);
+  }
+  return order;
+}
+
 async function loadOrder(orderId) {
   if (!orderId) return null;
-  return getOrder(orderId);
+  const order = await getOrder(orderId);
+  return enforceReviewDeadline(order);
+}
+
+async function loadAllOrders() {
+  const rows = await listOrders();
+  return Promise.all(rows.map((order) => enforceReviewDeadline(order)));
 }
 
 // helper bikin ID
@@ -125,26 +147,70 @@ async function pushOrderToPanel(order) {
 
 // checkout — hanya simpan, status pending_payment
 router.post("/order/checkout", async (req, res) => {
-  const { service_id, quantity, target, customer = {} } = req.body || {};
-  if (!service_id || !target || !Number.isFinite(Number(quantity)) || quantity <= 0) {
+  const {
+    service_id,
+    quantity,
+    target,
+    customer = {},
+    platform,
+    category,
+    service_name,
+    unit_price,
+    total_price,
+    price_total,
+    payment_email,
+  } = req.body || {};
+
+  const normalizedQuantity = Number(quantity);
+  if (!service_id || !target || !Number.isFinite(normalizedQuantity) || normalizedQuantity <= 0) {
     return res.status(422).json({ ok: false, message: "Data tidak lengkap" });
   }
+
+  const total = toNum(total_price ?? price_total);
+  const unit = toNum(unit_price);
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + PAYMENT_WINDOW_MS).toISOString();
+  const paymentContact = String(payment_email || "").trim() || PAYMENT_PROOF_EMAIL || null;
+
   const order_id = createOrderId();
   const order = {
     order_id,
-    service_id,
-    quantity: Number(quantity),
-    target,
-    customer,
+    service_id: String(service_id),
+    service_name: service_name ? String(service_name).trim() : null,
+    platform: platform ? String(platform).trim() : null,
+    category: category ? String(category).trim() : null,
+    quantity: normalizedQuantity,
+    target: String(target).trim(),
+    customer: {
+      name: String(customer.name || "").trim(),
+      phone: String(customer.phone || "").trim(),
+      email: String(customer.email || "").trim(),
+    },
+    notes: String(req.body.notes || "").trim() || null,
     status: "pending_payment",
+    created_at: now.toISOString(),
+    hold_until: expiresAt,
+    review_deadline: null,
+    price: {
+      unit,
+      total,
+      currency: "IDR",
+    },
     payment: {
       method: null,
-      amount: null,
+      amount: total,
       proof_url: null,
+      proof_status: "missing",
+      proof_channel: "upload",
+      fallback_email: paymentContact,
       uploaded_at: null,
-      expires_at: Date.now() + 30 * 60 * 1000, // 30 menit
+      reported_at: null,
+      expires_at: expiresAt,
+      notes: null,
     },
-    created_at: new Date().toISOString(),
+    timeline: {
+      pending_payment_at: now.toISOString(),
+    },
   };
   await cacheOrder(order);
   return res.json({ ok: true, order });
@@ -152,12 +218,52 @@ router.post("/order/checkout", async (req, res) => {
 
 // pilih metode bayar + nominal
 router.post("/order/payment-method", async (req, res) => {
-  const { order_id, method, amount } = req.body || {};
+  const {
+    order_id,
+    method,
+    amount,
+    proof_channel = "upload",
+    notes,
+    fallback_email,
+  } = req.body || {};
+
   const order = await loadOrder(order_id);
   if (!order) return res.status(404).json({ ok: false, message: "Order tidak ditemukan" });
-  order.payment.method = method;
-  order.payment.amount = Number(amount);
-  order.status = "waiting_payment_proof";
+  if (["cancelled", "rejected"].includes(order.status)) {
+    return res.status(409).json({ ok: false, message: "Order sudah tidak aktif" });
+  }
+  if (!method && !order.payment?.method) {
+    return res.status(422).json({ ok: false, message: "Metode pembayaran wajib dipilih" });
+  }
+
+  const finalAmount = toNum(amount) ?? order.price?.total ?? order.payment?.amount ?? null;
+  const now = new Date();
+  const reviewDeadline = new Date(now.getTime() + REVIEW_DEADLINE_MS).toISOString();
+  const proofChannel = (proof_channel || "upload").toLowerCase();
+  const normalizedNotes = String(notes || "").trim();
+
+  order.payment = {
+    ...(order.payment || {}),
+    method: method || order.payment?.method,
+    amount: finalAmount,
+    notes: normalizedNotes || order.payment?.notes || null,
+    reported_at: now.toISOString(),
+    proof_channel: proofChannel,
+    fallback_email: String(fallback_email || "").trim() || order.payment?.fallback_email || PAYMENT_PROOF_EMAIL,
+  };
+  order.payment.proof_status = order.payment.proof_url
+    ? "uploaded"
+    : proofChannel === "email"
+    ? "awaiting_email"
+    : "pending_upload";
+
+  order.status = "waiting_review";
+  order.review_deadline = reviewDeadline;
+  order.timeline = {
+    ...(order.timeline || {}),
+    payment_reported_at: order.payment.reported_at,
+  };
+
   await cacheOrder(order);
   return res.json({ ok: true, order });
 });
@@ -169,10 +275,20 @@ router.post("/order/upload-proof", upload.single("proof"), async (req, res) => {
   if (!order) return res.status(404).json({ ok: false, message: "Order tidak ditemukan" });
   if (!req.file) return res.status(400).json({ ok: false, message: "Bukti wajib diupload" });
 
+  order.payment = order.payment || {};
   const fileUrl = `/uploads/bukti/${req.file.filename}`;
   order.payment.proof_url = fileUrl;
   order.payment.uploaded_at = new Date().toISOString();
+  order.payment.proof_status = "uploaded";
+  order.payment.proof_channel = "upload";
   order.status = "waiting_review";
+  if (!order.review_deadline) {
+    order.review_deadline = new Date(Date.now() + REVIEW_DEADLINE_MS).toISOString();
+  }
+  order.timeline = {
+    ...(order.timeline || {}),
+    proof_uploaded_at: order.payment.uploaded_at,
+  };
   await cacheOrder(order);
   return res.json({ ok: true, order });
 });
@@ -188,15 +304,17 @@ router.use("/admin", (req, res, next) => {
 
 // admin: list order
 router.get("/admin/orders", async (_, res) => {
-  return res.json(await listOrders());
+  const orders = await loadAllOrders();
+  return res.json(orders);
 });
 
 // admin: update status
 router.post("/admin/orders/:orderId/status", async (req, res) => {
   const order = await loadOrder(req.params.orderId);
   if (!order) return res.status(404).json({ ok: false, message: "Tidak ada" });
-  const nextStatus = req.body.status || order.status;
-  order.admin_note = req.body.admin_note || null;
+  const requestedStatus = String(req.body.status || order.status || "").trim();
+  const nextStatus = requestedStatus || order.status;
+  order.admin_note = String(req.body.admin_note || "").trim() || null;
 
   if (nextStatus === "approved" && !order.provider_order_id) {
     const panelResult = await pushOrderToPanel(order);
@@ -211,6 +329,17 @@ router.post("/admin/orders/:orderId/status", async (req, res) => {
   }
 
   order.status = nextStatus;
+  if (["approved", "rejected", "cancelled"].includes(nextStatus)) {
+    order.review_deadline = null;
+  }
+  const now = new Date().toISOString();
+  order.timeline = {
+    ...(order.timeline || {}),
+    admin_reviewed_at: now,
+    ...(nextStatus === "approved" ? { approved_at: now } : {}),
+    ...(nextStatus === "rejected" ? { rejected_at: now } : {}),
+    ...(nextStatus === "cancelled" ? { cancelled_at: now } : {}),
+  };
   await cacheOrder(order);
 
   return res.json({ ok: true, order });
@@ -220,15 +349,43 @@ router.get("/order/status", async (req, res) => {
   try {
     const order_id = String(req.query.order_id || "").trim();
     if (!order_id) return res.status(400).json({ message: "order_id diperlukan" });
-    if (!PANEL_KEY || !PANEL_SECRET) {
-      return res.status(500).json({ message: "ENV SMMPANEL_API_KEY / SECRET belum diset" });
+
+    const local = (await loadOrder(order_id)) || null;
+    const hasPanelEnv = Boolean(PANEL_KEY && PANEL_SECRET);
+    const respondLocal = (panelStatus = null) => {
+      const baseStatus = panelStatus || {};
+      const preferredStatus = local?.status || baseStatus.status || "unknown";
+      return res.json({
+        order_id,
+        status: preferredStatus,
+        start_count: baseStatus.start_count ?? null,
+        remains: baseStatus.remains ?? null,
+        charge: baseStatus.charge ?? local?.price?.total ?? null,
+        panel_status: baseStatus.status ?? null,
+        target: local?.target ?? null,
+        service_name: local?.service_name ?? null,
+        quantity: local?.quantity ?? null,
+        provider_order_id: local?.provider_order_id ?? null,
+        created_at: local?.created_at ?? null,
+        review_deadline: local?.review_deadline ?? null,
+        payment: local?.payment ?? null,
+      });
+    };
+
+    if (!hasPanelEnv && !local) {
+      return res.status(404).json({ message: "Order tidak ditemukan" });
     }
 
+    if (!hasPanelEnv || (local && !local.provider_order_id)) {
+      return respondLocal();
+    }
+
+    const lookupId = local?.provider_order_id || order_id;
     const basePayload = {
       api_key: PANEL_KEY,
       secret_key: PANEL_SECRET,
       action: "status",
-      id: order_id,
+      id: lookupId,
     };
 
     const tryCall = async (headers, body) => {
@@ -262,11 +419,12 @@ router.get("/order/status", async (req, res) => {
           "Content-Type": "application/json",
           Accept: "application/json",
         },
-        JSON.stringify({ ...basePayload, id: Number(order_id) })
+        JSON.stringify({ ...basePayload, id: Number(lookupId) })
       ));
     }
 
     if (!json || json.status !== true) {
+      if (local) return respondLocal();
       return res.status(502).json({
         message: json?.data?.msg || json?.error || "Gagal mengambil status",
         raw: json || raw,
@@ -275,24 +433,13 @@ router.get("/order/status", async (req, res) => {
 
     const data = json.data || {};
     const panelStatus = {
-      order_id,
       status: data.status ?? "unknown",
       start_count: toNum(data.start_count),
       remains: toNum(data.remains ?? data.remain),
       charge: toNum(data.charge ?? data.price ?? data.harga),
     };
 
-    const local = (await loadOrder(order_id)) || null;
-
-    res.json({
-      ...panelStatus,
-      target: local?.target ?? null,
-      service_name: local?.service_name ?? null,
-      quantity: local?.quantity ?? null,
-      provider_order_id: local?.provider_order_id ?? null,
-      created_at: local?.created_at ?? null,
-      payment: local?.payment ?? null,
-    });
+    return respondLocal(panelStatus);
   } catch (err) {
     console.error("status error:", err);
     res.status(500).json({ message: String(err?.message || err) });

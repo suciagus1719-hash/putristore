@@ -1,6 +1,8 @@
 // backend/index.js  (Express server di Vercel)
 // CommonJS style (tidak perlu "type": "module")
 const express = require("express");
+const applyCors = require("./routes/order/cors");
+const paymentFlow = require("./routes/order/paymentFlow");
 
 // Node 18+ punya fetch global, kalau Node kamu <18 hilangkan komentar 2 baris di bawah:
 // const fetch = (...args) => import('node-fetch').then(({default: f}) => f(...args));
@@ -9,12 +11,10 @@ const app = express();
 app.use(express.json());
 // CORS untuk mengizinkan request dari domain mana pun (Github Pages, dll.)
 app.use((req, res, next) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Accept");
-  if (req.method === "OPTIONS") return res.sendStatus(204);
+  if (applyCors(req, res)) return;
   next();
 });
+app.use("/api", paymentFlow);
 const { kv } = require("@vercel/kv");
 
 // simpan metadata order

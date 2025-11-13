@@ -2,20 +2,13 @@
 // Express app dibungkus secara manual (app(req,res))
 const express = require("express");
 const paymentFlow = require("../routes/order/paymentFlow");
-const FRONTEND_ORIGIN =
-  process.env.FRONTEND_ORIGIN || "https://suciagus1719-hash.github.io";
+const applyCors = require("../routes/order/cors");
 
 const app = express();
 
 // CORS global supaya request preflight selalu berhasil
 app.use((req, res, next) => {
-  res.setHeader("Access-Control-Allow-Origin", FRONTEND_ORIGIN);
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader(
-    "Access-Control-Allow-Headers",
-    "Content-Type, Accept, Authorization, X-Admin-Key"
-  );
-  if (req.method === "OPTIONS") return res.sendStatus(204);
+  if (applyCors(req, res)) return;
   next();
 });
 

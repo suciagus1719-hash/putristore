@@ -1,0 +1,12 @@
+<svg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#5b21b6"/>
+      <stop offset="100%" stop-color="#1f2937"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="400" rx="24" fill="url(#grad)"/>
+  <text x="200" y="170" text-anchor="middle" font-size="56" fill="#ffffff" font-family="'Poppins', sans-serif">QRIS</text>
+  <text x="200" y="220" text-anchor="middle" font-size="18" fill="#e9d5ff" font-family="'Poppins', sans-serif">Ganti file di</text>
+  <text x="200" y="250" text-anchor="middle" font-size="18" fill="#e9d5ff" font-family="'Poppins', sans-serif">assets/payments/qris.svg</text>
+</svg>

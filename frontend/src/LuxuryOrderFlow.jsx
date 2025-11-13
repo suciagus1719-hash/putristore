@@ -40,7 +40,7 @@ import {
 } from "lucide-react";
 
 const WHATSAPP_GROUP_LINK = "https://chat.whatsapp.com/link-grup-kamu";
-const API_FALLBACK = "https://putristore-backend.vercel.app";
+const API_FALLBACK = "https://putristore-api.vercel.app";
 const AVATAR_URL =
   (import.meta?.env?.VITE_OWNER_AVATAR && import.meta.env.VITE_OWNER_AVATAR.trim()) ||
   "https://images.unsplash.com/photo-1504593811423-6dd665756598?auto=format&fit=crop&w=200&q=60";
@@ -71,14 +71,14 @@ const PAYMENT_METHODS = [
   { key: "bri", label: "Transfer BRI", icon: CreditCard },
 ];
 const PAYMENT_ACCOUNTS = {
-  dana: { number: "0812-3456-7890", owner: "PutriStore", label: "Nomor Dana" },
-  gopay: { number: "0856-7890-1234", owner: "PutriStore", label: "Nomor GoPay" },
+  dana: { number: "082322633452", owner: "Muh Agus", label: "Nomor Dana" },
+  gopay: { number: "088242049163", owner: "PutriGmoyy", label: "Nomor GoPay" },
   bri: { number: "1234-5678-9012", owner: "PutriStore", label: "Rekening BRI" },
 };
 const PAYMENT_INSTRUCTIONS = {
-  qris: "Scan QRIS premium berikut menggunakan aplikasi bank/domisili favorit Anda.",
-  dana: "Pastikan nominal sesuai agar verifikasi otomatis.",
-  gopay: "Transfer via GoPay tepat sesuai jumlah total.",
+  qris: "Scan Qris berikut dan isi sesuai total pembayaran ( tidak boleh kurang).",
+  dana: "Harap perhaikan nomor Dana dan atas nama penerima, Khusus Dana transfer wajib (+100 rupiah)",
+  gopay: "Harap perhaikan nomor Gopay dan atas nama penerima,transfer tidak boleh kurang",
   bri: "Transfer manual dengan berita acara ORDER + nama kamu.",
 };
 const PAYMENT_MEDIA = PAYMENT_METHODS.reduce((acc, method) => {
@@ -665,7 +665,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
 
     ctx.fillStyle = "#fff";
     ctx.font = "bold 42px 'Poppins', sans-serif";
-    ctx.fillText("Struk Order Premium", 120, 110);
+    ctx.fillText("Struk Order Putri Gmoyy", 120, 110);
 
     ctx.font = "20px 'Poppins', sans-serif";
     ctx.textBaseline = "top";
@@ -693,37 +693,37 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
       [
         "Waktu Order",
         orderTimestamp
-          ? `${formatWitaDate(orderTimestamp)} • ${formatWitaTime(orderTimestamp)}`
+          ? `${formatWitaDate(orderTimestamp)} � ${formatWitaTime(orderTimestamp)}`
           : "-",
       ],
     ];
 
-    const columns = [
-      { labelX: 120, valueX: 330, maxWidth: 360 },
-      { labelX: 630, valueX: 840, maxWidth: 300 },
-    ];
-    let columnIdx = 0;
+    const labelX = 100;
+    const valueX = 310;
+    const maxValueWidth = canvas.width - valueX - 120;
     let y = 180;
-    const lineHeight = 28;
+    const lineHeight = 32;
 
-    const wrapText = (text, startY, column) => {
+    const wrapText = (text, startY) => {
       const content = String(text || "-").trim() || "-";
       const words = content.split(/\s+/);
       let line = "";
       let currentY = startY;
+      ctx.textAlign = "left";
 
       words.forEach((word, idx) => {
         const testLine = line ? `${line} ${word}` : word;
         const width = ctx.measureText(testLine).width;
-        if (width > column.maxWidth && line) {
-          ctx.fillText(line, column.valueX, currentY);
+        if (width > maxValueWidth && line) {
+          ctx.fillText(line, valueX, currentY);
           line = word;
           currentY += lineHeight;
         } else {
           line = testLine;
         }
+
         if (idx === words.length - 1) {
-          ctx.fillText(line, column.valueX, currentY);
+          ctx.fillText(line, valueX, currentY);
           currentY += lineHeight;
         }
       });
@@ -732,16 +732,11 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
     };
 
     details.forEach(([label, value]) => {
-      const column = columns[columnIdx] || columns[columns.length - 1];
-      if (y > 530 && columnIdx < columns.length - 1) {
-        columnIdx += 1;
-        y = 180;
-      }
-
       ctx.fillStyle = "#bfa7ff";
-      ctx.fillText(`${label}:`, column.labelX, y);
+      ctx.textAlign = "left";
+      ctx.fillText(`${label}:`, labelX, y);
       ctx.fillStyle = "#fff";
-      const nextY = wrapText(value, y, column);
+      const nextY = wrapText(value, y);
       y = Math.max(nextY, y + lineHeight);
     });
 
@@ -762,7 +757,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
       ctx.fillText("Terima kasih telah memesan layanan kami.", 120, 560);
 
       ctx.font = "13px 'Poppins', sans-serif";
-      const watermark = "© PutriStore Premium Service";
+      const watermark = "� PutriStore Premium Service";
       const wmWidth = ctx.measureText(watermark).width;
       ctx.fillText(watermark, canvas.width - wmWidth - 60, canvas.height - 30);
       ctx.restore();
@@ -773,7 +768,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
       ctx.fillText("Terima kasih telah memesan layanan kami.", 120, 560);
 
       ctx.font = "13px 'Poppins', sans-serif";
-      const watermark = "© PutriStore Premium Service";
+      const watermark = "� PutriStore Premium Service";
       const wmWidth = ctx.measureText(watermark).width;
       ctx.fillText(watermark, canvas.width - wmWidth - 60, canvas.height - 30);
     }
@@ -904,7 +899,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
         <div className="flex items-center justify-between px-4 py-4 border-b border-white/10">
           <div className="flex items-center gap-2 text-white font-semibold">
             <ShieldCheck className="w-5 h-5 text-emerald-400" />
-            PutriStore
+            Putri Gmoyy Store
           </div>
           <button onClick={( ) => setMenuOpen(false)} aria-label="Close menu">
             <X className="w-5 h-5 text-white/70" />
@@ -1163,7 +1158,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
                 {
                   label: "Waktu Order",
                   value: orderTimestamp
-                    ? `${formatWitaDate(orderTimestamp)} • ${formatWitaTime(orderTimestamp)}`
+                    ? `${formatWitaDate(orderTimestamp)} � ${formatWitaTime(orderTimestamp)}`
                     : "-",
                 },
               ].map((item) => (
@@ -1181,7 +1176,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
               <p className="text-sm text-white/60">Total Pembayaran</p>
               <p className="text-3xl font-bold">{formatIDR(livePaymentAmount)}</p>
               <p className="text-xs text-white/50">
-                Jumlah ini otomatis mengikuti input jumlah yang kamu masukkan di langkah sebelumnya.
+                Harap transer sesuai jumlah diatas.
               </p>
             </div>
 
@@ -1273,7 +1268,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
                 </div>
               </label>
               <p className="text-xs text-white/60">
-                Jika terkendala upload, kirim bukti via email{" "}
+                Jika terkendala upload, kirim bukti tf via whatsapp grup di https://chat.whatsapp.com/Gpl3XMxuiVTGHbyEkaEoz6 , lalu klik tombol lanjut dibawah.{" "}
                 <a
                   href={`mailto:${PAYMENT_PROOF_EMAIL}?subject=Bukti%20Transfer%20${encodeURIComponent(order.order_id)}`}
                   className="text-white underline"
@@ -1302,11 +1297,11 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
             {renderStepTitle("3", "Struk Menunggu Konfirmasi")}
             <div className="rounded-2xl border border-white/10 bg-black/30 p-4 text-sm text-white/70 space-y-1">
               <p className="text-white/50">Status saat ini</p>
-              <p className="text-lg font-semibold capitalize">{String(order.status || "waiting_review").replace(/_/g, " ")}</p>
+              <p className="text-lg font-semibold capitalize">{String(order.status || "Menunggu_Konfirmasi_Admin").replace(/_/g, " ")}</p>
               <p>
-                Tenggat verifikasi:{" "}
+                Waktu Verifikasi :{" "}
                 {order.review_deadline
-                  ? `${formatWitaDate(new Date(order.review_deadline))} • ${formatWitaTime(
+                  ? `${formatWitaDate(new Date(order.review_deadline))} � ${formatWitaTime(
                       new Date(order.review_deadline)
                     )}`
                   : "Menunggu admin"}
@@ -1320,8 +1315,8 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
                   : "Belum ada"}
               </p>
               <p className="text-xs text-white/50">
-                Admin akan memeriksa dalam 1x24 jam. Jika tidak ada respon, order dibatalkan otomatis & dana bisa
-                direfund.
+                Admin akan memeriksa secepatnya jika dalam 10 menit tidak ada kabar dari admin, silahkan tag admin di grup untuk mempercepat proses.
+                
               </p>
             </div>
             {receiptImage ? (
@@ -1359,8 +1354,8 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
               </button>
             </div>
             <p className="text-xs text-white/60">
-              Setelah pembayaran disetujui, order langsung diteruskan ke panel otomatis. Klik tombol WhatsApp untuk
-              klaim garansi atau update antrian.
+              Setelah pembayaran disetujui, Order akan otomatis diproses silahkan pantau status order secara berkala.
+              
             </p>
             <button
               onClick={resetFlow}

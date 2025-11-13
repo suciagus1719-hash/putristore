@@ -1,10 +1,8 @@
 // frontend/src/config.js
-export const API_BASE = "https://putristore-backend.vercel.app";
-
+export const API_BASE = "https://putristore-api.vercel.app";
 
 export async function API(path, opts = {}) {
   const res = await fetch(API_BASE + path, opts);
-  // kalau backend balikin non-JSON, cegah crash
   try { return await res.json(); } catch { return { error: 'Non-JSON response' } }
 }
 

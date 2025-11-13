@@ -690,8 +690,12 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
       ["Email", orderCustomer?.email || "-"],
       ["Metode Bayar", paymentLabel],
       ["Nominal", formatIDR(nominal)],
-      ["Tanggal", orderTimestamp ? formatWitaDate(orderTimestamp) : "-"],
-      ["Jam (WITA)", orderTimestamp ? formatWitaTime(orderTimestamp) : "-"],
+      [
+        "Waktu Order",
+        orderTimestamp
+          ? `${formatWitaDate(orderTimestamp)} • ${formatWitaTime(orderTimestamp)}`
+          : "-",
+      ],
     ];
 
     const columns = [
@@ -1156,8 +1160,12 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
                 { label: "Nama Pemesan", value: liveCustomer?.name || "-" },
                 { label: "Nomor WhatsApp", value: liveCustomer?.phone || "-" },
                 { label: "Email", value: liveCustomer?.email || "-" },
-                { label: "Tanggal Order", value: orderTimestamp ? formatWitaDate(orderTimestamp) : "-" },
-                { label: "Jam Order (WITA)", value: orderTimestamp ? formatWitaTime(orderTimestamp) : "-" },
+                {
+                  label: "Waktu Order",
+                  value: orderTimestamp
+                    ? `${formatWitaDate(orderTimestamp)} • ${formatWitaTime(orderTimestamp)}`
+                    : "-",
+                },
               ].map((item) => (
                 <div key={`${item.label}-${item.value}`} className={item.span ? "sm:col-span-2" : ""}>
                   <p className="text-white/50">{item.label}</p>

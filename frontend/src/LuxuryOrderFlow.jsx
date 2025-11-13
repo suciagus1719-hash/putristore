@@ -649,10 +649,10 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
     ctx.fillRect(60, 60, 1080, 510);
 
     ctx.fillStyle = "#fff";
-    ctx.font = "bold 46px 'Poppins', sans-serif";
-    ctx.fillText("Struk Order Premium", 120, 120);
+    ctx.font = "bold 42px 'Poppins', sans-serif";
+    ctx.fillText("Struk Order Premium", 120, 110);
 
-    ctx.font = "22px 'Poppins', sans-serif";
+    ctx.font = "20px 'Poppins', sans-serif";
     ctx.textBaseline = "top";
     const orderCustomer = liveCustomer;
     const paymentLabel =
@@ -679,13 +679,15 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
       ["Jam (WITA)", orderTimestamp ? formatWitaTime(orderTimestamp) : "-"],
     ];
 
-    const labelX = 120;
-    const valueX = 360;
-    const maxValueWidth = 640;
-    const lineHeight = 32;
-    let y = 190;
+    const columns = [
+      { labelX: 120, valueX: 330, maxWidth: 360 },
+      { labelX: 630, valueX: 840, maxWidth: 300 },
+    ];
+    let columnIdx = 0;
+    let y = 180;
+    const lineHeight = 28;
 
-    const wrapText = (text, startY) => {
+    const wrapText = (text, startY, column) => {
       const content = String(text || "-").trim() || "-";
       const words = content.split(/\s+/);
       let line = "";
@@ -694,15 +696,15 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
       words.forEach((word, idx) => {
         const testLine = line ? `${line} ${word}` : word;
         const width = ctx.measureText(testLine).width;
-        if (width > maxValueWidth && line) {
-          ctx.fillText(line, valueX, currentY);
+        if (width > column.maxWidth && line) {
+          ctx.fillText(line, column.valueX, currentY);
           line = word;
           currentY += lineHeight;
         } else {
           line = testLine;
         }
         if (idx === words.length - 1) {
-          ctx.fillText(line, valueX, currentY);
+          ctx.fillText(line, column.valueX, currentY);
           currentY += lineHeight;
         }
       });
@@ -711,20 +713,28 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
     };
 
     details.forEach(([label, value]) => {
+      const column = columns[columnIdx] || columns[columns.length - 1];
+      if (y > 530 && columnIdx < columns.length - 1) {
+        columnIdx += 1;
+        y = 180;
+      }
+
       ctx.fillStyle = "#bfa7ff";
-      ctx.fillText(`${label}:`, labelX, y);
+      ctx.fillText(`${label}:`, column.labelX, y);
       ctx.fillStyle = "#fff";
-      const nextY = wrapText(value, y);
+      const nextY = wrapText(value, y, column);
       y = Math.max(nextY, y + lineHeight);
     });
 
     ctx.fillStyle = "#a78bfa";
-    ctx.font = "18px 'Poppins', sans-serif";
+    ctx.font = "16px 'Poppins', sans-serif";
     ctx.textBaseline = "alphabetic";
     ctx.fillText("Terima kasih telah memesan layanan kami.", 120, 560);
 
-    ctx.font = "14px 'Poppins', sans-serif";
-    ctx.fillText("© PutriStore Premium Service", canvas.width - 320, canvas.height - 30);
+    ctx.font = "13px 'Poppins', sans-serif";
+    const watermark = "© PutriStore Premium Service";
+    const wmWidth = ctx.measureText(watermark).width;
+    ctx.fillText(watermark, canvas.width - wmWidth - 60, canvas.height - 30);
 
     setReceiptImage(canvas.toDataURL("image/png"));
   };

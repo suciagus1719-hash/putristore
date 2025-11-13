@@ -64,6 +64,18 @@ const BRAND_BADGE_URL =
 const PAYMENT_PROOF_EMAIL =
   (import.meta?.env?.VITE_PAYMENT_EMAIL && import.meta.env.VITE_PAYMENT_EMAIL.trim()) ||
   "putristore.invoice@gmail.com";
+const PAYMENT_METHODS = [
+  { key: "qris", label: "QRIS", icon: CreditCard, asset: "assets/payments/qris.svg" },
+  { key: "dana", label: "Dana", icon: Wallet, asset: "assets/payments/dana.svg" },
+  { key: "gopay", label: "GoPay", icon: Smartphone, asset: "assets/payments/gopay.svg" },
+  { key: "bri", label: "Transfer BRI", icon: CreditCard, asset: "assets/payments/bri.svg" },
+];
+const PAYMENT_INSTRUCTIONS = {
+  qris: "Scan QRIS premium berikut menggunakan aplikasi bank/domisili favorit Anda.",
+  dana: "Kirim pembayaran ke akun Dana 08xx-xxxx-xxxx (PutriStore) dan sertakan catatan order ID.",
+  gopay: "Bayar via GoPay ke 08xx-xxxx-xxxx (PutriStore). Nominal harus sesuai total agar terverifikasi otomatis.",
+  bri: "Transfer manual ke rekening BRI 1234-5678-9012 a.n PutriStore, berita acara: ORDER + nama kamu.",
+};
 const PAYMENT_MEDIA = PAYMENT_METHODS.reduce((acc, method) => {
   acc[method.key] = resolveAssetPath(method.asset);
   return acc;
@@ -135,19 +147,6 @@ const FALLBACK_CATEGORIES = [
   "Other",
   "Discord",
 ];
-
-const PAYMENT_METHODS = [
-  { key: "qris", label: "QRIS", icon: CreditCard, asset: "assets/payments/qris.svg" },
-  { key: "dana", label: "Dana", icon: Wallet, asset: "assets/payments/dana.svg" },
-  { key: "gopay", label: "GoPay", icon: Smartphone, asset: "assets/payments/gopay.svg" },
-  { key: "bri", label: "Transfer BRI", icon: CreditCard, asset: "assets/payments/bri.svg" },
-];
-const PAYMENT_INSTRUCTIONS = {
-  qris: "Scan QRIS premium berikut menggunakan aplikasi bank/domisili favorit Anda.",
-  dana: "Kirim pembayaran ke akun Dana 08xx-xxxx-xxxx (PutriStore) dan sertakan catatan order ID.",
-  gopay: "Bayar via GoPay ke 08xx-xxxx-xxxx (PutriStore). Nominal harus sesuai total agar terverifikasi otomatis.",
-  bri: "Transfer manual ke rekening BRI 1234-5678-9012 a.n PutriStore, berita acara: ORDER + nama kamu.",
-};
 
 const DEFAULT_QUANTITY = 100;
 const createEmptyCustomer = () => ({ name: "", phone: "", email: "" });

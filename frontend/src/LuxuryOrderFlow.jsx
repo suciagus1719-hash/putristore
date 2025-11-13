@@ -653,6 +653,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
     ctx.fillText("Struk Order Premium", 120, 140);
 
     ctx.font = "24px 'Poppins', sans-serif";
+    ctx.textBaseline = "top";
     const orderCustomer = liveCustomer;
     const paymentLabel =
       PAYMENT_METHODS.find((m) => m.key === (order.payment?.method || payment.method))?.label || "-";
@@ -661,30 +662,66 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
       ["Order ID", order.order_id],
       ["Platform", order.platform || selectedPlatform || "-"],
       ["Kategori", order.category || selectedCategory || "-"],
-      ["Layanan", `${order.service_name || selectedService?.name || "-"} (${order.service_id})`],
+      [
+        "Layanan",
+        order.service_name || selectedService?.name
+          ? `${order.service_name || selectedService?.name || "-"} (${order.service_id})`
+          : order.service_id,
+      ],
       ["Target", order.target],
-      ["Quantity", order.quantity],
+      ["Quantity", (order.quantity ?? 0).toLocaleString("id-ID")],
       ["Nama", orderCustomer?.name || "-"],
       ["No. WhatsApp", orderCustomer?.phone || "-"],
       ["Email", orderCustomer?.email || "-"],
       ["Metode Bayar", paymentLabel],
       ["Nominal", formatIDR(nominal)],
-      ["Tanggal", formatWitaDate(orderTimestamp)],
-      ["Jam (WITA)", formatWitaTime(orderTimestamp)],
+      ["Tanggal", orderTimestamp ? formatWitaDate(orderTimestamp) : "-"],
+      ["Jam (WITA)", orderTimestamp ? formatWitaTime(orderTimestamp) : "-"],
     ];
 
+    const labelX = 120;
+    const valueX = 360;
+    const maxValueWidth = 650;
+    const lineHeight = 34;
     let y = 200;
+
+    const wrapText = (text, startY) => {
+      const content = String(text || "-").trim() || "-";
+      const words = content.split(/\s+/);
+      let line = "";
+      let currentY = startY;
+
+      words.forEach((word, idx) => {
+        const testLine = line ? `${line} ${word}` : word;
+        const width = ctx.measureText(testLine).width;
+        if (width > maxValueWidth && line) {
+          ctx.fillText(line, valueX, currentY);
+          line = word;
+          currentY += lineHeight;
+        } else {
+          line = testLine;
+        }
+        if (idx === words.length - 1) {
+          ctx.fillText(line, valueX, currentY);
+          currentY += lineHeight;
+        }
+      });
+
+      return currentY;
+    };
+
     details.forEach(([label, value]) => {
-      ctx.fillStyle = "#a78bfa";
-      ctx.fillText(`${label}:`, 120, y);
+      ctx.fillStyle = "#bfa7ff";
+      ctx.fillText(`${label}:`, labelX, y);
       ctx.fillStyle = "#fff";
-      ctx.fillText(String(value), 360, y);
-      y += 40;
+      const nextY = wrapText(value, y);
+      y = Math.max(nextY, y + lineHeight);
     });
 
     ctx.fillStyle = "#a78bfa";
     ctx.font = "20px 'Poppins', sans-serif";
-    ctx.fillText("Terima kasih telah memesan layanan kami.", 120, 520);
+    ctx.textBaseline = "alphabetic";
+    ctx.fillText("Terima kasih telah memesan layanan kami.", 120, 560);
 
     setReceiptImage(canvas.toDataURL("image/png"));
   };

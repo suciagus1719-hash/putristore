@@ -459,6 +459,9 @@ router.use("/admin", (req, res, next) => {
   if (!expected) {
     return res.status(500).json({ ok: false, message: "ADMIN_SECRET belum diset" });
   }
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(204);
+  }
   const token = String(req.headers["x-admin-key"] || "").trim();
   if (token !== expected) {
     return res.status(401).json({ ok: false, message: "Unauthorized" });
@@ -472,8 +475,8 @@ router.get("/admin/orders", async (_, res) => {
   return res.json(orders);
 });
 
-// admin: update status
-router.post("/admin/orders/:orderId/status", async (req, res) => {
+// admin: update status (mendukung POST & PATCH agar fleksibel)
+async function handleAdminStatusUpdate(req, res) {
   const order = await loadOrder(req.params.orderId);
   if (!order) return res.status(404).json({ ok: false, message: "Tidak ada" });
   const requestedStatus = String(req.body.status || order.status || "").trim();
@@ -508,7 +511,10 @@ router.post("/admin/orders/:orderId/status", async (req, res) => {
   await cacheOrder(order);
 
   return res.json({ ok: true, order });
-});
+}
+
+router.post("/admin/orders/:orderId/status", handleAdminStatusUpdate);
+router.patch("/admin/orders/:orderId/status", handleAdminStatusUpdate);
 
 router.get("/order/status", async (req, res) => {
   try {

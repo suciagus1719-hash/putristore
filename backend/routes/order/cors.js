@@ -21,8 +21,14 @@ function resolveOrigin(requestOrigin) {
 function applyCors(req, res) {
   const origin = resolveOrigin(req.headers.origin);
   res.setHeader("Access-Control-Allow-Origin", origin);
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Accept, Authorization, X-Admin-Key");
+  // Izinkan PATCH agar admin bisa update status lewat metode selain POST
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PATCH,OPTIONS");
+  const requestedHeaders = req.headers["access-control-request-headers"];
+  const allowHeaders =
+    requestedHeaders && requestedHeaders.length
+      ? requestedHeaders
+      : "Content-Type, Accept, Authorization, X-Admin-Key, x-admin-key";
+  res.setHeader("Access-Control-Allow-Headers", allowHeaders);
   res.setHeader("Access-Control-Max-Age", "600");
 
   if (origin !== "*") {

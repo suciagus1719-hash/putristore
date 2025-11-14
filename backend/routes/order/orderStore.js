@@ -2,18 +2,25 @@
 const fs = require("fs");
 const path = require("path");
 
-let Database = null;
+let sqliteLib = null;
 try {
   // eslint-disable-next-line global-require
-  Database = require("better-sqlite3");
+  sqliteLib = require("better-sqlite3");
 } catch (err) {
-  Database = null;
+  sqliteLib = null;
   console.warn("[orderStore] better-sqlite3 tidak tersedia:", err.message);
 }
 
 const STORE_KEY = "__putristore_orders";
-const ORDER_HISTORY_LIMIT = Math.max(Number(process.env.ADMIN_HISTORY_LIMIT || 500), 100);
-const DB_PATH = process.env.ORDER_DB_PATH || path.resolve(process.cwd(), "data.sqlite");
+const ORDER_INDEX_KEY = "__putristore_order_index";
+const ORDER_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 hari
+const DEFAULT_HISTORY_LIMIT = 500;
+const envHistoryLimit =
+  Number(process.env.ADMIN_HISTORY_LIMIT ?? process.env.ADMIN_MAX_ORDERS ?? DEFAULT_HISTORY_LIMIT);
+const ORDER_HISTORY_LIMIT =
+  Number.isFinite(envHistoryLimit) && envHistoryLimit > 0 ? envHistoryLimit : DEFAULT_HISTORY_LIMIT;
+const DB_PATH =
+  process.env.ORDER_DB_PATH || path.join(process.cwd(), "data.sqlite");
 
 const memStore = globalThis[STORE_KEY] || new Map();
 globalThis[STORE_KEY] = memStore;
@@ -44,17 +51,68 @@ const resolveOrderScore = (order) => {
   return Number.isFinite(score) ? score : Date.now();
 };
 
+const trimOrders = (orders) => {
+  if (!Array.isArray(orders)) return [];
+  if (orders.length <= ORDER_HISTORY_LIMIT) return orders;
+  return orders
+    .sort((a, b) => resolveOrderScore(b) - resolveOrderScore(a))
+    .slice(0, ORDER_HISTORY_LIMIT);
+};
+
+const resolveEnv = (...candidates) =>
+  candidates.find((value) => typeof value === "string" && value.trim().length > 0)?.trim() || null;
+
+const kvUrlCandidates = [
+  process.env.KV_REST_API_URL,
+  process.env.UPSTASH_KV_KV_REST_API_URL,
+  process.env.UPSTASH_KV_URL,
+];
+const kvTokenCandidates = [
+  process.env.KV_REST_API_TOKEN,
+  process.env.UPSTASH_KV_KV_REST_API_TOKEN,
+  process.env.UPSTASH_KV_TOKEN,
+];
+const resolvedKvUrl = resolveEnv(...kvUrlCandidates);
+const resolvedKvToken = resolveEnv(...kvTokenCandidates);
+if (resolvedKvUrl && !process.env.KV_REST_API_URL) {
+  process.env.KV_REST_API_URL = resolvedKvUrl;
+}
+if (resolvedKvToken && !process.env.KV_REST_API_TOKEN) {
+  process.env.KV_REST_API_TOKEN = resolvedKvToken;
+}
+
+let kvClient = null;
+let kvReady = false;
+
+function getKv() {
+  if (kvReady) return kvClient;
+  kvReady = true;
+  const kvUrl = process.env.KV_REST_API_URL;
+  const kvToken = process.env.KV_REST_API_TOKEN;
+  if (!kvUrl || !kvToken) {
+    kvClient = null;
+    return kvClient;
+  }
+
+  try {
+    ({ kv: kvClient } = require("@vercel/kv"));
+  } catch (err) {
+    kvClient = null;
+    console.warn("[orderStore] gagal memuat @vercel/kv:", err.message);
+  }
+  return kvClient;
+}
+
 let sqlite = null;
 let sqliteReady = false;
 
-function initSqlite() {
+function getSqlite() {
   if (sqliteReady) return sqlite;
   sqliteReady = true;
-  if (!Database) return null;
-
+  if (!sqliteLib) return null;
   try {
     fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
-    sqlite = new Database(DB_PATH);
+    sqlite = new sqliteLib(DB_PATH);
     sqlite.pragma("journal_mode = WAL");
     sqlite
       .prepare(
@@ -71,13 +129,42 @@ function initSqlite() {
     sqlite = null;
     console.warn("[orderStore] sqlite tidak siap:", err.message);
   }
-
   return sqlite;
+}
+
+async function persistKv(order) {
+  if (!order?.order_id) return;
+  const kv = getKv();
+  if (!kv) return;
+  try {
+    const key = `order:${order.order_id}`;
+    await kv.set(key, order, { ex: ORDER_TTL_SECONDS });
+    await kv.zadd(ORDER_INDEX_KEY, {
+      score: resolveOrderScore(order),
+      member: order.order_id,
+    });
+    await kv.expire(ORDER_INDEX_KEY, ORDER_TTL_SECONDS);
+
+    if (ORDER_HISTORY_LIMIT > 0) {
+      const total = await kv.zcard(ORDER_INDEX_KEY);
+      const overflow = total - ORDER_HISTORY_LIMIT;
+      if (overflow > 0) {
+        const obsoleteIds = await kv.zrange(ORDER_INDEX_KEY, 0, overflow - 1);
+        if (obsoleteIds?.length) {
+          await kv.zrem(ORDER_INDEX_KEY, ...obsoleteIds);
+          await kv.del(...obsoleteIds.map((id) => `order:${id}`));
+          obsoleteIds.forEach((id) => memStore.delete(id));
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("[orderStore] kv.persist gagal:", err.message);
+  }
 }
 
 function persistSqlite(order) {
   if (!order?.order_id) return;
-  const db = initSqlite();
+  const db = getSqlite();
   if (!db) return;
   try {
     const payload = JSON.stringify(order);
@@ -92,7 +179,6 @@ function persistSqlite(order) {
       updated_at: updated,
       created_at: order.created_at || null,
     });
-
     if (ORDER_HISTORY_LIMIT > 0) {
       db.prepare(
         `DELETE FROM admin_orders
@@ -104,26 +190,66 @@ function persistSqlite(order) {
       ).run(ORDER_HISTORY_LIMIT);
     }
   } catch (err) {
-    console.warn("[orderStore] sqlite persist gagal:", err.message);
+    console.warn("[orderStore] sqlite.persist gagal:", err.message);
+  }
+}
+
+async function fetchFromKv(orderId) {
+  if (!orderId) return null;
+  const kv = getKv();
+  if (!kv) return null;
+  try {
+    const raw = await kv.get(`order:${orderId}`);
+    if (!raw) return null;
+    const order = decodeOrder(raw);
+    if (order?.order_id) {
+      memStore.set(order.order_id, order);
+      persistSqlite(order);
+    }
+    return order;
+  } catch (err) {
+    console.warn("[orderStore] kv.get gagal:", err.message);
+    return null;
   }
 }
 
 function fetchFromSqlite(orderId) {
   if (!orderId) return null;
-  const db = initSqlite();
+  const db = getSqlite();
   if (!db) return null;
   try {
     const row = db.prepare("SELECT payload FROM admin_orders WHERE order_id = ?").get(orderId);
     if (!row?.payload) return null;
-    return decodeOrder(row.payload);
+    const order = decodeOrder(row.payload);
+    if (order?.order_id) {
+      memStore.set(order.order_id, order);
+    }
+    return order;
   } catch (err) {
-    console.warn("[orderStore] sqlite get gagal:", err.message);
+    console.warn("[orderStore] sqlite.get gagal:", err.message);
     return null;
   }
 }
 
+async function listFromKv() {
+  const kv = getKv();
+  if (!kv) return [];
+  try {
+    const ids = await kv.zrange(ORDER_INDEX_KEY, 0, ORDER_HISTORY_LIMIT - 1, { rev: true });
+    if (!ids?.length) return [];
+    const keys = ids.map((id) => `order:${id}`);
+    const rawEntries = keys.length ? await kv.mget(...keys) : [];
+    return rawEntries
+      .map((entry) => decodeOrder(entry))
+      .filter((order) => order?.order_id);
+  } catch (err) {
+    console.warn("[orderStore] kv.list gagal:", err.message);
+    return [];
+  }
+}
+
 function listFromSqlite() {
-  const db = initSqlite();
+  const db = getSqlite();
   if (!db) return [];
   try {
     const rows = db
@@ -133,7 +259,7 @@ function listFromSqlite() {
       .map((row) => decodeOrder(row?.payload))
       .filter((order) => order?.order_id);
   } catch (err) {
-    console.warn("[orderStore] sqlite list gagal:", err.message);
+    console.warn("[orderStore] sqlite.list gagal:", err.message);
     return [];
   }
 }
@@ -142,6 +268,7 @@ async function saveOrder(order) {
   if (!order || !order.order_id) return null;
   memStore.set(order.order_id, order);
   persistSqlite(order);
+  await persistKv(order);
   return order;
 }
 
@@ -149,27 +276,25 @@ async function getOrder(orderId) {
   if (!orderId) return null;
   if (memStore.has(orderId)) return memStore.get(orderId);
   const sqliteOrder = fetchFromSqlite(orderId);
-  if (sqliteOrder) {
-    memStore.set(orderId, sqliteOrder);
-  }
-  return sqliteOrder;
+  if (sqliteOrder) return sqliteOrder;
+  return fetchFromKv(orderId);
 }
 
 async function listOrders() {
   const memoryOrders = Array.from(memStore.values());
   const sqliteOrders = listFromSqlite();
-
-  if (!sqliteOrders.length) {
-    return memoryOrders.sort((a, b) => resolveOrderScore(b) - resolveOrderScore(a));
-  }
+  const kvOrders = await listFromKv();
 
   const merged = new Map();
-  sqliteOrders.forEach((order) => merged.set(order.order_id, order));
+  kvOrders.forEach((order) => merged.set(order.order_id, order));
+  sqliteOrders.forEach((order) => {
+    if (order?.order_id && !merged.has(order.order_id)) merged.set(order.order_id, order);
+  });
   memoryOrders.forEach((order) => {
     if (order?.order_id && !merged.has(order.order_id)) merged.set(order.order_id, order);
   });
 
-  return Array.from(merged.values()).sort((a, b) => resolveOrderScore(b) - resolveOrderScore(a));
+  return trimOrders(Array.from(merged.values()));
 }
 
 module.exports = {

@@ -1,7 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { buildApiUrl } from "./config.js";
-const STORAGE_KEY = "putristore-admin-key";
-
 const STATUS_META = [
   { key: "all", label: "Semua" },
   { key: "pending_payment", label: "Pending Pembayaran" },
@@ -37,10 +35,9 @@ const resolveProofUrl = (value) => {
 };
 
 export default function AdminPanel() {
-  const persistedKey = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) || "" : "";
   const [passwordInput, setPasswordInput] = useState("");
-  const [adminKey, setAdminKey] = useState(persistedKey);
-  const [authed, setAuthed] = useState(Boolean(persistedKey));
+  const [adminKey, setAdminKey] = useState("");
+  const [authed, setAuthed] = useState(false);
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -82,14 +79,13 @@ export default function AdminPanel() {
     setError("");
     setLoading(true);
     try {
-      const attemptHeaders = { "x-admin-key": passwordInput.trim() };
-      const res = await fetch(buildApiUrl("/api/admin/orders"), { headers: attemptHeaders });
+      const secret = passwordInput.trim();
+      const res = await fetch(buildApiUrl("/api/admin/orders"), { headers: { "x-admin-key": secret } });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Password salah");
       setOrders(Array.isArray(data) ? data : []);
-      setAdminKey(passwordInput.trim());
+      setAdminKey(secret);
       setAuthed(true);
-      localStorage.setItem(STORAGE_KEY, passwordInput.trim());
       setPasswordInput("");
     } catch (err) {
       setError(err.message || "Password salah");
@@ -102,8 +98,9 @@ export default function AdminPanel() {
     setAuthed(false);
     setAdminKey("");
     setPasswordInput("");
-    localStorage.removeItem(STORAGE_KEY);
     setOrders([]);
+    setNoteDrafts({});
+    setToast("");
   };
 
   const updateStatus = async ({ order_id, status, admin_note }) => {

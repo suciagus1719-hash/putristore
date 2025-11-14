@@ -48,11 +48,14 @@ function readSecretFile(candidatePath) {
 }
 
 function resolveAdminSecret() {
-  const fallbackFiles = [
-    process.env.ADMIN_SECRET_FILE,
-    path.resolve(process.cwd(), "tmp_admin_secret.txt"),
-    path.resolve(__dirname, "../../../tmp_admin_secret.txt"),
-  ];
+  const fallbackFiles =
+    process.env.NODE_ENV === "production"
+      ? [process.env.ADMIN_SECRET_FILE]
+      : [
+          process.env.ADMIN_SECRET_FILE,
+          path.resolve(process.cwd(), "tmp_admin_secret.txt"),
+          path.resolve(__dirname, "../../../tmp_admin_secret.txt"),
+        ];
 
   const candidates = [
     process.env.ADMIN_SECRET,

@@ -3,6 +3,8 @@ const multer = require("multer");
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
+const sharp = require("sharp");
+const { put } = require("@vercel/blob");
 const fetch = global.fetch || require("node-fetch");
 const applyCors = require("./cors");
 const { saveOrder, getOrder, listOrders } = require("./orderStore");
@@ -28,11 +30,70 @@ const HYDRATION_SECRET =
   process.env.SMMPANEL_SECRET ||
   "putristore-hydration-secret";
 
+const BLOB_TOKEN =
+  process.env.BLOB_READ_WRITE_TOKEN ||
+  process.env.BLOB_RW_TOKEN ||
+  process.env.VERCEL_BLOB_RW_TOKEN ||
+  process.env.VERCEL_BLOB_READ_WRITE_TOKEN ||
+  null;
+
+const WHATSAPP_WEBHOOK_URL =
+  process.env.NOTIFY_WHATSAPP_URL ||
+  process.env.WHATSAPP_WEBHOOK_URL ||
+  process.env.WHATSAPP_NOTIFY_URL ||
+  null;
+const WHATSAPP_WEBHOOK_TOKEN =
+  process.env.NOTIFY_WHATSAPP_TOKEN ||
+  process.env.WHATSAPP_WEBHOOK_TOKEN ||
+  process.env.WHATSAPP_NOTIFY_TOKEN ||
+  null;
+const EMAIL_WEBHOOK_URL = process.env.NOTIFY_EMAIL_URL || process.env.EMAIL_WEBHOOK_URL || null;
+
 // penyimpanan bukti (in-memory -> disimpan sebagai data URL pada order)
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 }, // max 5MB
 });
+
+const sanitizeFileName = (value) =>
+  String(value || "proof")
+    .toLowerCase()
+    .replace(/[^a-z0-9.-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(-80) || `proof-${Date.now()}`;
+
+async function normalizeProofBuffer(file) {
+  const baseBuffer = file?.buffer || Buffer.from([]);
+  const baseName = sanitizeFileName(file?.originalname || "proof");
+  if (!baseBuffer.length) {
+    return { buffer: baseBuffer, mime: file?.mimetype || "application/octet-stream", baseName };
+  }
+  try {
+    const buffer = await sharp(baseBuffer).rotate().jpeg({ quality: 70 }).toBuffer();
+    return { buffer, mime: "image/jpeg", baseName: `${baseName}.jpg` };
+  } catch (err) {
+    console.warn("sharp convert failed:", err.message);
+    return { buffer: baseBuffer, mime: file?.mimetype || "application/octet-stream", baseName };
+  }
+}
+
+async function storeProofExternally(buffer, { orderId, fileName, contentType }) {
+  if (!BLOB_TOKEN) {
+    return { ok: false, message: "BLOB_READ_WRITE_TOKEN belum diset" };
+  }
+  const safeKey = `proofs/${sanitizeFileName(orderId)}-${Date.now()}-${fileName || "proof.jpg"}`;
+  try {
+    const { url } = await put(safeKey, buffer, {
+      access: "public",
+      contentType: contentType || "application/octet-stream",
+      token: BLOB_TOKEN,
+    });
+    return { ok: true, url };
+  } catch (err) {
+    console.error("blob upload failed:", err);
+    return { ok: false, message: err.message || "Upload gagal" };
+  }
+}
 
 function readSecretFile(candidatePath) {
   if (!candidatePath) return "";
@@ -71,6 +132,63 @@ async function cacheOrder(order) {
   if (!order?.order_id) return;
   order.hydration_token = order.hydration_token || encodeHydrationToken(order);
   await saveOrder(order);
+}
+
+const buildStatusMessage = (order) => {
+  const baseService = order.service_name || `Layanan #${order.service_id || "-"}`;
+  const base =
+    order.status === "approved"
+      ? `Pesanan ${order.order_id} sudah di-approve dan diteruskan ke panel.`
+      : order.status === "rejected"
+      ? `Pesanan ${order.order_id} ditolak. Silakan hubungi admin.`
+      : order.status === "waiting_review"
+      ? `Bukti pembayaran untuk pesanan ${order.order_id} sudah kami terima dan sedang direview.`
+      : `Status pesanan ${order.order_id}: ${order.status}`;
+  return `${base}\nLayanan: ${baseService}\nJumlah: ${order.quantity}\nTarget: ${order.target}`;
+};
+
+async function sendWhatsAppNotification(order) {
+  if (!WHATSAPP_WEBHOOK_URL || !order?.customer?.phone) return;
+  try {
+    await fetch(WHATSAPP_WEBHOOK_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(WHATSAPP_WEBHOOK_TOKEN ? { Authorization: `Bearer ${WHATSAPP_WEBHOOK_TOKEN}` } : {}),
+      },
+      body: JSON.stringify({
+        phone: order.customer.phone,
+        message: buildStatusMessage(order),
+        order_id: order.order_id,
+        status: order.status,
+      }),
+    });
+  } catch (err) {
+    console.warn("whatsapp notify gagal:", err.message);
+  }
+}
+
+async function sendEmailNotification(order) {
+  if (!EMAIL_WEBHOOK_URL || !order?.customer?.email) return;
+  try {
+    await fetch(EMAIL_WEBHOOK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        to: order.customer.email,
+        subject: `Status Pesanan ${order.order_id}`,
+        message: buildStatusMessage(order),
+        order_id: order.order_id,
+        status: order.status,
+      }),
+    });
+  } catch (err) {
+    console.warn("email notify gagal:", err.message);
+  }
+}
+
+async function dispatchNotifications(order) {
+  await Promise.all([sendWhatsAppNotification(order), sendEmailNotification(order)]);
 }
 
 async function enforceReviewDeadline(order) {
@@ -469,13 +587,29 @@ router.post("/order/upload-proof", upload.single("proof"), async (req, res) => {
   if (!order) return res.status(404).json({ ok: false, message: "Order tidak ditemukan" });
   if (!req.file) return res.status(400).json({ ok: false, message: "Bukti wajib diupload" });
 
+  const prepared = await normalizeProofBuffer(req.file);
+  if (!prepared.buffer?.length) {
+    return res.status(400).json({ ok: false, message: "File bukti tidak valid" });
+  }
+
+  const uploaded = await storeProofExternally(prepared.buffer, {
+    orderId: order.order_id,
+    fileName: prepared.baseName,
+    contentType: prepared.mime,
+  });
+  if (!uploaded.ok) {
+    return res.status(500).json({
+      ok: false,
+      message: uploaded.message || "Gagal menyimpan bukti. Pastikan BLOB_READ_WRITE_TOKEN sudah diset.",
+    });
+  }
+
   order.payment = order.payment || {};
-  const mime = req.file.mimetype || "application/octet-stream";
-  const base64 = req.file.buffer?.toString("base64") || "";
-  order.payment.proof_url = base64 ? `data:${mime};base64,${base64}` : null;
-  order.payment.proof_file_name = req.file.originalname || null;
-  order.payment.proof_mime = mime;
-  order.payment.proof_size = req.file.size || null;
+  order.payment.proof_url = uploaded.url;
+  order.payment.proof_file_name = prepared.baseName;
+  order.payment.proof_mime = prepared.mime;
+  order.payment.proof_size = prepared.buffer.length;
+  order.payment.proof_storage = "blob_external";
   order.payment.uploaded_at = new Date().toISOString();
   order.payment.proof_status = "uploaded";
   order.payment.proof_channel = "upload";
@@ -489,6 +623,7 @@ router.post("/order/upload-proof", upload.single("proof"), async (req, res) => {
   };
   order.hydration_token = encodeHydrationToken(order);
   await cacheOrder(order);
+  dispatchNotifications(order).catch((err) => console.warn("notify gagal:", err?.message || err));
   return res.json({ ok: true, order });
 });
 
@@ -547,6 +682,7 @@ async function handleAdminStatusUpdate(req, res) {
   };
   order.hydration_token = encodeHydrationToken(order);
   await cacheOrder(order);
+  dispatchNotifications(order).catch((err) => console.warn("notify gagal:", err?.message || err));
 
   return res.json({ ok: true, order });
 }

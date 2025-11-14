@@ -45,6 +45,7 @@ export default function AdminPanel() {
   const [search, setSearch] = useState("");
   const [noteDrafts, setNoteDrafts] = useState({});
   const [toast, setToast] = useState("");
+  const [expandedOrders, setExpandedOrders] = useState({});
 
   const authHeaders = useMemo(() => (adminKey ? { "x-admin-key": adminKey } : {}), [adminKey]);
 
@@ -341,6 +342,7 @@ export default function AdminPanel() {
             const payment = order.payment || {};
             const proofUrl = resolveProofUrl(payment.proof_url);
             const noteValue = noteDrafts[order.order_id] ?? order.admin_note ?? "";
+            const expanded = Boolean(expandedOrders[order.order_id]);
 
             return (
               <article
@@ -362,13 +364,29 @@ export default function AdminPanel() {
                     <p className="text-xs text-white/50">
                       {(order.platform || "-") + " • " + (order.category || "-")}
                     </p>
+                    <p className="text-xs text-white/40">Service ID: {order.service_id || "-"}</p>
                   </div>
-                  <span className={`px-3 py-1 rounded-full text-xs font-semibold capitalize ${statusChips[order.status] || "bg-white/10 border border-white/20"}`}>
-                    {formatStatus(order.status)}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`px-3 py-1 rounded-full text-xs font-semibold capitalize ${
+                        statusChips[order.status] || "bg-white/10 border border-white/20"
+                      }`}
+                    >
+                      {formatStatus(order.status)}
+                    </span>
+                    <button
+                      className="text-xs px-3 py-1 rounded-full border border-white/20 text-white/80 hover:bg-white/10 transition"
+                      onClick={() =>
+                        setExpandedOrders((prev) => ({ ...prev, [order.order_id]: !prev[order.order_id] }))
+                      }
+                    >
+                      {expanded ? "Sembunyikan" : "Lihat Detail"}
+                    </button>
+                  </div>
                 </div>
 
-                <div className="grid lg:grid-cols-4 gap-4 text-sm text-white/80">
+                {expanded && (
+                  <div className="grid lg:grid-cols-4 gap-4 text-sm text-white/80">
                   <div className="space-y-2">
                     <p className="text-white/50 uppercase text-xs">Customer</p>
                     <p>{order.customer?.name || "-"}</p>
@@ -440,7 +458,8 @@ export default function AdminPanel() {
                       </button>
                     </div>
                   </div>
-                </div>
+                  </div>
+                )}
               </article>
             );
           })}

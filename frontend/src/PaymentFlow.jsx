@@ -1,6 +1,5 @@
 import React, { useState } from "react";
-
-const API_BASE = import.meta.env.VITE_API_URL || "https://putristore-backend.vercel.app";
+import { buildApiUrl } from "./config.js";
 const WHATSAPP_GROUP_LINK = "https://chat.whatsapp.com/link-grup-kamu";
 const PAYMENT_PROOF_EMAIL =
   (import.meta.env?.VITE_PAYMENT_EMAIL && import.meta.env.VITE_PAYMENT_EMAIL.trim()) ||
@@ -37,7 +36,7 @@ export default function PaymentFlow() {
   const [error, setError] = useState("");
 
   const request = async (path, opts = {}) => {
-    const res = await fetch(`${API_BASE}${path}`, opts);
+    const res = await fetch(buildApiUrl(path), opts);
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.message || "Error");
     return data;
@@ -112,9 +111,6 @@ export default function PaymentFlow() {
       form.append("order_payload", JSON.stringify(order));
       if (order?.hydration_token) {
         form.append("hydration_token", order.hydration_token);
-      }
-      if (order) {
-        form.append("order_snapshot", JSON.stringify(order));
       }
       const data = await request("/api/order/upload-proof", {
         method: "POST",

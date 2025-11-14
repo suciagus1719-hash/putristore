@@ -68,18 +68,18 @@ const PAYMENT_METHODS = [
   { key: "qris", label: "QRIS", icon: CreditCard, asset: "assets/payments/qris.svg" },
   { key: "dana", label: "Dana", icon: Wallet },
   { key: "gopay", label: "GoPay", icon: Smartphone },
-  { key: "seabank", label: "Transfer SeaBank", icon: CreditCard },
+  { key: "seabank", label: "SeaBank", icon: CreditCard },
 ];
 const PAYMENT_ACCOUNTS = {
-  dana: { number: "082322633452", owner: "Muh Agus", label: "Nomor Dana" },
+  dana: { number: "082322633452", owner: "MUH AGUS", label: "Nomor Dana" },
   gopay: { number: "088242049163", owner: "PutriGmoyy", label: "Nomor GoPay" },
-  seabank: { number: "9011-2345-6789", owner: "PutriStore", label: "Rekening SeaBank" },
+  seabank: { number: "901498188343", owner: "SUCI AS ZAHRA", label: "Rekening SeaBank" },
 };
 const PAYMENT_INSTRUCTIONS = {
   qris: "Scan Qris berikut dan isi sesuai total pembayaran ( tidak boleh kurang).",
-  dana: "Harap perhaikan nomor Dana dan atas nama penerima, Khusus Dana transfer wajib (+100 rupiah)",
-  gopay: "Harap perhaikan nomor Gopay dan atas nama penerima,transfer tidak boleh kurang",
-  seabank: "Transfer SeaBank dengan berita acara ORDER + nama kamu.",
+  dana: "Harap perhatikan nomor Dana dan atas nama penerima, Khusus Dana transfer wajib (+100 rupiah)",
+  gopay: "Harap perhatikan nomor Gopay dan atas nama penerima,transfer tidak boleh kurang",
+  seabank: "Harap perhatikan nomor rekening dan nama penerima, jumah trasnfer tidak boleh kurang",
 };
 const PAYMENT_MEDIA = PAYMENT_METHODS.reduce((acc, method) => {
   acc[method.key] = resolveAssetPath(method.asset);
@@ -1245,14 +1245,16 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
             </div>
 
             <div className="space-y-3">
-              <div className="rounded-2xl border border-white/15 bg-white/5 p-4 text-sm text-white/70 space-y-2">
-                <p className="text-white font-semibold text-base">Informasi Pembayaran</p>
-                <p>
-                  Pastikan jumlah transfer sesuai dengan total di atas dan sertakan berita acara{" "}
-                  <span className="font-semibold text-white">ORDER + Nama Kamu</span>. Bukti pembayaran yang jelas akan
-                  mempercepat proses verifikasi admin.
-                </p>
-              </div>
+              <label className="text-sm text-white/80 space-y-2 block">
+                Catatan Pembayaran (opsional)
+                <textarea
+                  className="w-full rounded-2xl border border-white/10 bg-white/5 p-3 text-white/80"
+                  rows={2}
+                  placeholder="Contoh: transfer dari rekening BRI kakak / bukti saya kirim via email."
+                  value={payment.notes}
+                  onChange={(e) => setPayment((prev) => ({ ...prev, notes: e.target.value }))}
+                />
+              </label>
               <label className="text-sm text-white/80 space-y-2 block">
                 Upload Bukti Pembayaran (opsional)
                 <div className="rounded-2xl border border-dashed border-white/30 bg-white/5 px-4 py-6 text-center text-sm text-white/70">
@@ -1273,7 +1275,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
                 >
                   {PAYMENT_PROOF_EMAIL}
                 </a>{" "}
-                atau WhatsApp admin, lalu klik tombol di bawah.
+                
               </p>
               <button
                 onClick={handlePaymentMethod}

@@ -14,7 +14,7 @@ app.use((req, res, next) => {
   if (applyCors(req, res)) return;
   next();
 });
-app.use("/api", paymentFlow);
+app.use(paymentFlow);
 const { kv } = require("@vercel/kv");
 
 // simpan metadata order

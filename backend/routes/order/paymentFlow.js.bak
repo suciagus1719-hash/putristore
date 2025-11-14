@@ -1,8 +1,6 @@
 const express = require("express");
 const multer = require("multer");
 const crypto = require("crypto");
-const fs = require("fs");
-const path = require("path");
 const fetch = global.fetch || require("node-fetch");
 const applyCors = require("./cors");
 const { saveOrder, getOrder, listOrders } = require("./orderStore");
@@ -18,13 +16,9 @@ const REVIEW_DEADLINE_MS = 24 * 60 * 60 * 1000; // 1x24 jam
 const PAYMENT_WINDOW_MINUTES = Math.max(Number(process.env.PAYMENT_WINDOW_MINUTES || 30), 5);
 const PAYMENT_WINDOW_MS = PAYMENT_WINDOW_MINUTES * 60 * 1000;
 const PAYMENT_PROOF_EMAIL = process.env.PAYMENT_PROOF_EMAIL || process.env.ADMIN_EMAIL || null;
-const ADMIN_SECRET = resolveAdminSecret();
-if (!ADMIN_SECRET) {
-  console.warn("[admin] ADMIN_SECRET tidak diset. Endpoint admin akan ditolak sampai secret tersedia.");
-}
 const HYDRATION_SECRET =
   process.env.ORDER_SIGN_KEY ||
-  ADMIN_SECRET ||
+  process.env.ADMIN_SECRET ||
   process.env.SMMPANEL_SECRET ||
   "putristore-hydration-secret";
 
@@ -33,36 +27,6 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 }, // max 5MB
 });
-
-function readSecretFile(candidatePath) {
-  if (!candidatePath) return "";
-  try {
-    const resolved = path.isAbsolute(candidatePath)
-      ? candidatePath
-      : path.resolve(process.cwd(), candidatePath);
-    if (!fs.existsSync(resolved)) return "";
-    return fs.readFileSync(resolved, "utf8").trim();
-  } catch {
-    return "";
-  }
-}
-
-function resolveAdminSecret() {
-  const fallbackFiles = [
-    process.env.ADMIN_SECRET_FILE,
-    path.resolve(process.cwd(), "tmp_admin_secret.txt"),
-    path.resolve(__dirname, "../../../tmp_admin_secret.txt"),
-  ];
-
-  const candidates = [
-    process.env.ADMIN_SECRET,
-    process.env.ADMIN_KEY,
-    process.env.ADMIN_TOKEN,
-    ...fallbackFiles.map((filePath) => readSecretFile(filePath)),
-  ];
-
-  return candidates.find((value) => typeof value === "string" && value.trim())?.trim() || "";
-}
 
 async function cacheOrder(order) {
   if (!order?.order_id) return;
@@ -491,14 +455,15 @@ router.post("/order/upload-proof", upload.single("proof"), async (req, res) => {
 
 // admin: auth sederhana pakai header
 router.use("/admin", (req, res, next) => {
-  if (!ADMIN_SECRET) {
+  const expected = (process.env.ADMIN_SECRET || "").trim();
+  if (!expected) {
     return res.status(500).json({ ok: false, message: "ADMIN_SECRET belum diset" });
   }
   if (req.method === "OPTIONS") {
     return res.sendStatus(204);
   }
   const token = String(req.headers["x-admin-key"] || "").trim();
-  if (token !== ADMIN_SECRET) {
+  if (token !== expected) {
     return res.status(401).json({ ok: false, message: "Unauthorized" });
   }
   next();
@@ -510,8 +475,8 @@ router.get("/admin/orders", async (_, res) => {
   return res.json(orders);
 });
 
-// admin: update status (mendukung POST & PATCH agar fleksibel)
-async function handleAdminStatusUpdate(req, res) {
+// admin: update status
+router.post("/admin/orders/:orderId/status", async (req, res) => {
   const order = await loadOrder(req.params.orderId);
   if (!order) return res.status(404).json({ ok: false, message: "Tidak ada" });
   const requestedStatus = String(req.body.status || order.status || "").trim();
@@ -546,10 +511,7 @@ async function handleAdminStatusUpdate(req, res) {
   await cacheOrder(order);
 
   return res.json({ ok: true, order });
-}
-
-router.post("/admin/orders/:orderId/status", handleAdminStatusUpdate);
-router.patch("/admin/orders/:orderId/status", handleAdminStatusUpdate);
+});
 
 router.get("/order/status", async (req, res) => {
   try {

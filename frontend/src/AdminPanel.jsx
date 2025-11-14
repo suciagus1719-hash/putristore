@@ -1,6 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
-
-const API_BASE = import.meta.env.VITE_API_URL || "https://putristore-backend.vercel.app";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { buildApiUrl } from "./config.js";
 const STORAGE_KEY = "putristore-admin-key";
 
 const STATUS_META = [
@@ -27,6 +26,15 @@ const formatCurrency = (value) =>
   );
 const formatDate = (value) =>
   value ? new Date(value).toLocaleString("id-ID", { timeZone: "Asia/Makassar" }) : "-";
+const absoluteUrlPattern = /^https?:\/\//i;
+const resolveProofUrl = (value) => {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith("data:") || absoluteUrlPattern.test(trimmed)) return trimmed;
+  const path = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+  return buildApiUrl(path);
+};
 
 export default function AdminPanel() {
   const persistedKey = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) || "" : "";
@@ -41,17 +49,14 @@ export default function AdminPanel() {
   const [noteDrafts, setNoteDrafts] = useState({});
   const [toast, setToast] = useState("");
 
-  const headers = adminKey ? { "x-admin-key": adminKey } : {};
+  const authHeaders = useMemo(() => (adminKey ? { "x-admin-key": adminKey } : {}), [adminKey]);
 
-  useEffect(() => {
-    if (authed) fetchOrders();
-  }, [authed, statusFilter]);
-
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
+    if (!adminKey) return;
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`${API_BASE}/api/admin/orders`, { headers });
+      const res = await fetch(buildApiUrl("/api/admin/orders"), { headers: authHeaders });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Gagal memuat order");
       setOrders(Array.isArray(data) ? data : []);
@@ -63,7 +68,11 @@ export default function AdminPanel() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [adminKey, authHeaders]);
+
+  useEffect(() => {
+    if (authed) fetchOrders();
+  }, [authed, fetchOrders]);
 
   const handleLogin = async () => {
     if (!passwordInput.trim()) {
@@ -74,7 +83,7 @@ export default function AdminPanel() {
     setLoading(true);
     try {
       const attemptHeaders = { "x-admin-key": passwordInput.trim() };
-      const res = await fetch(`${API_BASE}/api/admin/orders`, { headers: attemptHeaders });
+      const res = await fetch(buildApiUrl("/api/admin/orders"), { headers: attemptHeaders });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Password salah");
       setOrders(Array.isArray(data) ? data : []);
@@ -99,9 +108,9 @@ export default function AdminPanel() {
 
   const updateStatus = async ({ order_id, status, admin_note }) => {
     try {
-      const res = await fetch(`${API_BASE}/api/admin/orders/${order_id}/status`, {
+      const res = await fetch(buildApiUrl(`/api/admin/orders/${order_id}/status`), {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...headers },
+        headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify({ status, admin_note }),
       });
       const data = await res.json();
@@ -114,7 +123,7 @@ export default function AdminPanel() {
   };
 
   const showToast = (message, isError = false) => {
-    setToast(message ? `${isError ? "⚠️ " : "✅ "}${message}` : "");
+    setToast(message ? `${isError ? "[!]" : "[OK]"} ${message}` : "");
     if (message) {
       setTimeout(() => setToast(""), 2500);
     }
@@ -333,14 +342,7 @@ export default function AdminPanel() {
 
           {filteredOrders.map((order) => {
             const payment = order.payment || {};
-            const proofUrlRaw = typeof payment.proof_url === "string" ? payment.proof_url.trim() : "";
-            const proofUrl = proofUrlRaw
-              ? proofUrlRaw.startsWith("data:")
-                ? proofUrlRaw
-                : proofUrlRaw.startsWith("http")
-                ? proofUrlRaw
-                : `${API_BASE}${proofUrlRaw.startsWith("/") ? "" : "/"}${proofUrlRaw}`
-              : null;
+            const proofUrl = resolveProofUrl(payment.proof_url);
             const noteValue = noteDrafts[order.order_id] ?? order.admin_note ?? "";
 
             return (

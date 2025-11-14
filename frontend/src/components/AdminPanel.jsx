@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from "react";
+import { buildApiUrl } from "../config.js";
 
-const API = (p, o={}) => fetch((import.meta.env.VITE_API_BASE || 'http://localhost:3001') + p, o).then(r=>r.json());
+const API = (path, opts = {}) => fetch(buildApiUrl(path), opts).then((r) => r.json());
 
 export default function AdminPanel(){
   const [token, setToken] = useState(localStorage.getItem('adminToken') || '');

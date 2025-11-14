@@ -4,8 +4,7 @@ import { Routes, Route } from "react-router-dom";
 import LuxuryOrderFlow from "../LuxuryOrderFlow.jsx";
 import PaymentFlow from "../PaymentFlow.jsx";
 import AdminPanel from "../AdminPanel.jsx";
-
-const API_BASE = import.meta.env.VITE_API_URL || "https://putristore-backend.vercel.app";
+import { API_BASE } from "../config.js";
 
 export default function App() {
   return (

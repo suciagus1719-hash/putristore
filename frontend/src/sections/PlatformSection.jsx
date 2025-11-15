@@ -11,7 +11,17 @@ export default function PlatformSection() {
         const res = await fetch(buildApiUrl("/api/platforms"));
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
-        setPlatforms(Array.isArray(data) ? data : []);
+        const normalized = (Array.isArray(data) ? data : []).map((item, idx) => {
+          if (typeof item === "string") {
+            return { id: `${idx}-${item.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`, name: item };
+          }
+          const name = item?.name || item?.label || String(item || "");
+          return {
+            id: item?.id || name.toLowerCase().replace(/[^a-z0-9]+/g, "-") || `${idx}`,
+            name,
+          };
+        });
+        setPlatforms(normalized);
       } catch (e) {
         setError(String(e.message || e));
         console.error("Gagal memuat layanan:", e);
@@ -28,7 +38,7 @@ export default function PlatformSection() {
       <h2>Layanan Kami</h2>
       <ul>
         {platforms.length ? (
-          platforms.map((p) => <li key={p.id || p.name}>{p.name}</li>)
+          platforms.map((p) => <li key={p.id || p.name || p}>{p.name || p.label || p}</li>)
         ) : (
           <li>Sedang memuat...</li>
         )}

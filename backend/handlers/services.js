@@ -2,6 +2,8 @@
 // GET /api/services?platform=Instagram&action=Followers
 // Ambil daftar layanan dari panel SMM, lalu filter dan map untuk UI.
 
+const fetch = global.fetch || require("node-fetch");
+
 // CORS
 const ALLOW_ORIGIN = process.env.CORS_ORIGIN || "*";
 

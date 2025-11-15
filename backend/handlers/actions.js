@@ -1,7 +1,8 @@
 // GET /api/actions?platform=Facebook
 // Ambil semua layanan dari panel -> kumpulkan kategori untuk platform tsb.
 
-const ORIGIN = "https://suciagus1719-hash.github.io";
+const fetch = global.fetch || require("node-fetch");
+const ORIGIN = process.env.FRONTEND_ORIGIN || "https://suciagus1719-hash.github.io";
 
 function guessPlatform(s = "") {
   const n = String(s).toLowerCase();
@@ -15,9 +16,19 @@ function guessPlatform(s = "") {
   return "Other";
 }
 
-const FALLBACK = ["Followers","Likes","Views","Comments","Shares","Subscribers","Members","Reactions","Other"];
+const FALLBACK = [
+  "Followers",
+  "Likes",
+  "Views",
+  "Comments",
+  "Shares",
+  "Subscribers",
+  "Members",
+  "Reactions",
+  "Other",
+];
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", ORIGIN);
   res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
   if (req.method === "OPTIONS") return res.status(204).end();
@@ -33,7 +44,11 @@ export default async function handler(req, res) {
     if (!API || !KEY || !SEC) return res.status(200).json(FALLBACK);
 
     const body = new URLSearchParams({ api_key: KEY, secret_key: SEC, action: "services" });
-    const r = await fetch(API, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json" }, body });
+    const r = await fetch(API, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
+      body,
+    });
     const text = await r.text();
 
     let payload; try { payload = JSON.parse(text); } catch { payload = {}; }

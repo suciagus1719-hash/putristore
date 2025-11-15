@@ -1,5 +1,7 @@
 // api/status_probe.js  — endpoint diagnosa
-export default async function handler(req, res) {
+const fetch = global.fetch || require("node-fetch");
+
+module.exports = async function handler(req, res) {
   try {
     const order_id = String(req.query.order_id ?? req.body?.order_id ?? "").trim();
 

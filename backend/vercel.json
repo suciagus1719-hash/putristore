@@ -1,13 +1,16 @@
 {
-  "headers": [
+  "routes": [
+    { "src": "/api/admin/orders/.*", "methods": ["OPTIONS"], "dest": "/api/admin/options" },
     {
-      "source": "/api/(.*)",
-      "headers": [
-        { "key": "Access-Control-Allow-Origin", "value": "https://suciagus1719-hash.github.io" },
-        { "key": "Access-Control-Allow-Methods", "value": "GET,POST,PATCH,OPTIONS" },
-        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Accept, Authorization, X-Admin-Key" },
-        { "key": "Access-Control-Max-Age", "value": "86400" }
-      ]
-    }
+      "src": "/api/(.*)",
+      "dest": "/api/$1",
+      "headers": {
+        "Access-Control-Allow-Origin": "https://suciagus1719-hash.github.io",
+        "Access-Control-Allow-Methods": "GET,POST,PATCH,OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Accept, Authorization, X-Admin-Key",
+        "Access-Control-Max-Age": "86400"
+      }
+    },
+    { "src": "/api/(.*)", "dest": "/api/$1" }
   ]
 }

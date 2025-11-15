@@ -1,17 +1,18 @@
-const fetch = global.fetch || require("node-fetch");
+const { resolveServiceCatalog } = require("../utils/serviceCatalog");
+const { guessPlatform } = require("../utils/serviceUtils");
+
 const ORIGIN = process.env.FRONTEND_ORIGIN || "https://suciagus1719-hash.github.io";
 
-function guessPlatform(name = "") {
-  const n = name.toLowerCase();
-  if (n.includes("tiktok")) return "TikTok";
-  if (n.includes("instagram")) return "Instagram";
-  if (n.includes("youtube")) return "YouTube";
-  if (n.includes("facebook")) return "Facebook";
-  if (n.includes("telegram")) return "Telegram";
-  if (n.includes("twitter") || n.includes("x")) return "Twitter/X";
-  if (n.includes("shopee") || n.includes("tokopedia") || n.includes("bukalapak")) return "Shopee";
-  return "Other";
-}
+const FALLBACK = [
+  "TikTok",
+  "Twitter/X",
+  "Instagram",
+  "YouTube",
+  "Facebook",
+  "Telegram",
+  "Shopee",
+  "Other",
+];
 
 const normalizeList = (names) =>
   names.map((name) => ({
@@ -25,46 +26,17 @@ module.exports = async function handler(req, res) {
   if (req.method === "OPTIONS") return res.status(204).end();
   if (req.method !== "GET") return res.status(405).end();
 
-  const FALLBACK = [
-    "TikTok",
-    "Twitter/X",
-    "Instagram",
-    "YouTube",
-    "Facebook",
-    "Telegram",
-    "Shopee",
-    "Other",
-  ];
-
   try {
-    const API = process.env.SMMPANEL_BASE_URL;
-    const KEY = process.env.SMMPANEL_API_KEY;
-    const SEC = process.env.SMMPANEL_SECRET;
-
-    if (!API || !KEY || !SEC) return res.status(200).json(normalizeList(FALLBACK));
-
-    const form = new URLSearchParams({ api_key: KEY, secret_key: SEC, action: "services" });
-    const r = await fetch(API, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
-      body: form,
-    });
-    const text = await r.text();
-    let payload;
-    try {
-      payload = JSON.parse(text);
-    } catch {
-      payload = null;
-    }
-    let list = [];
-    if (Array.isArray(payload)) list = payload;
-    else if (Array.isArray(payload?.data)) list = payload.data;
-
+    const snapshot = await resolveServiceCatalog({});
     const set = new Set();
-    for (const s of list) set.add(guessPlatform(String(s?.name || s?.category || "")));
+    (snapshot.list || []).forEach((svc) => {
+      const plat = svc.platform || guessPlatform(svc.name || svc.category || "");
+      if (plat) set.add(plat);
+    });
     const names = Array.from(set);
     return res.status(200).json(normalizeList(names.length ? names : FALLBACK));
-  } catch {
+  } catch (err) {
+    console.warn("[platforms] fallback:", err.message);
     return res.status(200).json(normalizeList(FALLBACK));
   }
 };

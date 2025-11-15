@@ -8,6 +8,11 @@ const { put } = require("@vercel/blob");
 const fetch = global.fetch || require("node-fetch");
 const applyCors = require("./cors");
 const { saveOrder, getOrder, listOrders } = require("./orderStore");
+const {
+  saveManualCatalog,
+  forceRefreshCatalog,
+  readCachedCatalog,
+} = require("../../utils/serviceCatalog");
 
 const router = express.Router();
 
@@ -640,6 +645,34 @@ router.use("/admin", (req, res, next) => {
     return res.status(401).json({ ok: false, message: "Unauthorized" });
   }
   next();
+});
+
+router.get("/admin/services/catalog", async (_req, res) => {
+  try {
+    const snapshot = await readCachedCatalog();
+    return res.json(snapshot || { list: [], meta: null });
+  } catch (err) {
+    return res.status(500).json({ ok: false, message: err.message || "catalog error" });
+  }
+});
+
+router.post("/admin/services/catalog", async (req, res) => {
+  try {
+    const { services = [], source } = req.body || {};
+    const snapshot = await saveManualCatalog(services, { source: source || "manual-upload" });
+    return res.json({ ok: true, count: snapshot.list.length, meta: snapshot.meta });
+  } catch (err) {
+    return res.status(400).json({ ok: false, message: err.message || "Invalid payload" });
+  }
+});
+
+router.post("/admin/services/catalog/refresh", async (_req, res) => {
+  try {
+    const snapshot = await forceRefreshCatalog();
+    return res.json({ ok: true, count: snapshot.list.length, meta: snapshot.meta });
+  } catch (err) {
+    return res.status(502).json({ ok: false, message: err.message, attempts: err.attempts || null });
+  }
 });
 
 // admin: list order

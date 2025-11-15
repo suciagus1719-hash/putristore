@@ -46,8 +46,10 @@ export default function AdminPanel() {
   const [noteDrafts, setNoteDrafts] = useState({});
   const [toast, setToast] = useState("");
   const [expandedOrders, setExpandedOrders] = useState({});
+  const [catalogMeta, setCatalogMeta] = useState(null);
 
   const authHeaders = useMemo(() => (adminKey ? { "x-admin-key": adminKey } : {}), [adminKey]);
+  const catalogUpdatedLabel = catalogMeta?.cached_at ? formatDate(catalogMeta.cached_at) : "Belum pernah sinkron";
 
   const fetchOrders = useCallback(async () => {
     if (!adminKey) return;
@@ -68,9 +70,24 @@ export default function AdminPanel() {
     }
   }, [adminKey, authHeaders]);
 
+  const fetchCatalogMeta = useCallback(async () => {
+    if (!adminKey) return;
+    try {
+      const res = await fetch(buildApiUrl("/api/admin/services/catalog"), { headers: authHeaders });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Gagal memuat katalog");
+      setCatalogMeta(data?.meta || null);
+    } catch (err) {
+      console.warn("catalog meta error:", err.message);
+    }
+  }, [adminKey, authHeaders]);
+
   useEffect(() => {
-    if (authed) fetchOrders();
-  }, [authed, fetchOrders]);
+    if (authed) {
+      fetchOrders();
+      fetchCatalogMeta();
+    }
+  }, [authed, fetchOrders, fetchCatalogMeta]);
 
   const handleLogin = async () => {
     if (!passwordInput.trim()) {
@@ -117,6 +134,21 @@ export default function AdminPanel() {
       fetchOrders();
     } catch (err) {
       showToast(err.message || "Gagal update", true);
+    }
+  };
+
+  const syncServices = async () => {
+    try {
+      const res = await fetch(buildApiUrl("/api/admin/services/catalog/refresh"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Gagal sinkron layanan");
+      setCatalogMeta(data.meta || null);
+      showToast(`Sinkron ${data.count || 0} layanan`);
+    } catch (err) {
+      showToast(err.message || "Gagal sinkron layanan", true);
     }
   };
 
@@ -303,6 +335,25 @@ export default function AdminPanel() {
             value={formatCurrency(summary.todayIncome)}
             accent="from-emerald-500 to-lime-500"
           />
+        </section>
+
+        <section className="bg-white/5 rounded-3xl border border-white/10 p-5 space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs text-white/60 uppercase">Katalog Layanan</p>
+              <p className="text-lg font-semibold text-white">{catalogUpdatedLabel}</p>
+              <p className="text-xs text-white/50">Sumber: {catalogMeta?.source || "-"}</p>
+            </div>
+            <button
+              onClick={syncServices}
+              className="px-4 py-2 rounded-2xl bg-purple-700 text-white text-xs font-semibold"
+            >
+              Sinkronkan
+            </button>
+          </div>
+          <p className="text-xs text-white/60">
+            Tekan tombol ketika daftar layanan di halaman utama kosong.
+          </p>
         </section>
 
         <section className="bg-white/5 rounded-3xl border border-white/10 p-5 space-y-4">

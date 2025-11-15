@@ -256,6 +256,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
 
   const [allServices, setAllServices] = useState([]);
   const [servicesLoading, setServicesLoading] = useState(true);
+  const [serviceError, setServiceError] = useState("");
 
   const [selectedPlatform, setSelectedPlatform] = useState("Instagram");
   const [categories, setCategories] = useState([]);
@@ -293,6 +294,33 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
   const prevPlatformRef = useRef(selectedPlatform);
   const prevCategoryRef = useRef(selectedCategory);
 
+  const loadServices = useCallback(
+    async (options = {}) => {
+      setServicesLoading(true);
+      try {
+        const url = new URL(`${apiBase}/api/services`);
+        if (options.refresh) url.searchParams.set("refresh", "1");
+        const res = await fetch(url.toString());
+        const data = await res.json();
+        if (Array.isArray(data) && data.length) {
+          setAllServices(data);
+          setServiceError("");
+        } else {
+          setAllServices(Array.isArray(data) ? data : []);
+          const reason =
+            res.headers?.get?.("x-service-error") ||
+            "Belum ada layanan aktif. Sinkronkan melalui menu Admin.";
+          setServiceError(reason);
+        }
+      } catch (err) {
+        setServiceError(err.message || "Gagal memuat layanan.");
+      } finally {
+        setServicesLoading(false);
+      }
+    },
+    [apiBase]
+  );
+
   const resetOrderInputs = useCallback(() => {
     setSelectedService(null);
     setServiceId("");
@@ -313,7 +341,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
       allServices.forEach((srv) => {
         const nameLower = String(srv.name || "").toLowerCase();
         if (EXCLUDED_SERVICE_KEYWORDS.some((kw) => nameLower.includes(kw))) return;
-        const plat = guessPlatform(srv.name || srv.category || "");
+        const plat = srv.platform || guessPlatform(srv.name || srv.category || "");
         if (plat === platform && srv.category) {
           const cat = String(srv.category).trim();
           if (!shouldHideCategory(cat)) normalized.add(cat);
@@ -340,20 +368,8 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
   );
 
   useEffect(() => {
-    async function loadServices() {
-      try {
-        setServicesLoading(true);
-        const res = await fetch(`${apiBase}/api/services`);
-        const list = await res.json();
-        if (Array.isArray(list)) setAllServices(list);
-      } catch (e) {
-        console.error("Gagal memuat services:", e);
-      } finally {
-        setServicesLoading(false);
-      }
-    }
     loadServices();
-  }, [apiBase]);
+  }, [loadServices]);
 
   useEffect(() => {
     if (!selectedPlatform) return;
@@ -453,7 +469,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
       const nameLower = String(srv.name || "").toLowerCase();
       if (EXCLUDED_SERVICE_KEYWORDS.some((kw) => nameLower.includes(kw))) return false;
       if (shouldHideCategory(srv.category)) return false;
-      const plat = guessPlatform(srv.name || srv.category || "");
+      const plat = srv.platform || guessPlatform(srv.name || srv.category || "");
       if (plat !== selectedPlatform) return false;
       if (!selectedCategory) return false;
       return (
@@ -973,6 +989,21 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
               ))}
             </div>
 
+            {!servicesLoading && serviceError && (
+              <div className="rounded-xl border border-amber-500/40 bg-amber-950/30 px-3 py-2 text-[12px] text-amber-100 flex flex-col gap-2">
+                <span>{serviceError}</span>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => loadServices({ refresh: true })}
+                    className="px-3 py-1 rounded-full border border-amber-400/50 bg-amber-500/20 text-amber-50 text-xs"
+                  >
+                    Muat ulang layanan
+                  </button>
+                </div>
+              </div>
+            )}
+
             {categoryLoading ? (
               <div className="flex items-center gap-2 text-sm text-white/70">
                 <div className="flex items-center gap-1">
@@ -1012,9 +1043,18 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
             )}
 
             <div className="space-y-3">
-              <p className="text-sm uppercase tracking-wide text-white/50">
-                Pilih layanan ({servicesLoading ? "memuat?" : `${filteredServices.length} opsi`})
-              </p>
+              <div className="flex items-center justify-between gap-2 text-sm uppercase tracking-wide text-white/50">
+                <span>
+                  Pilih layanan ({servicesLoading ? "memuat..." : `${filteredServices.length} opsi`})
+                </span>
+                <button
+                  type="button"
+                  onClick={() => loadServices({ refresh: true })}
+                  className="text-[10px] px-2 py-1 rounded-full border border-white/20 text-white/70 hover:text-white hover:border-white/40 transition"
+                >
+                  Refresh
+                </button>
+              </div>
               {!selectedCategory ? (
                 <div className="rounded-xl border border-dashed border-white/20 bg-white/5 px-4 py-3 text-sm text-white/60">
                   Pilih kategori layanan terlebih dahulu.
@@ -1022,7 +1062,9 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
               ) : (
                 <div className="grid md:grid-cols-2 gap-2 max-h-[260px] overflow-y-auto pr-2">
                   {filteredServices.length === 0 && (
-                    <div className="col-span-2 text-white/60 text-sm">Tidak ada layanan.</div>
+                    <div className="col-span-2 text-white/60 text-sm">
+                      {serviceError || "Tidak ada layanan."}
+                    </div>
                   )}
                   {filteredServices.map((srv) => {
                     const selected = selectedService?.provider_service_id === srv.provider_service_id;

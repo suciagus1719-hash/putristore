@@ -1,0 +1,54 @@
+*** Begin Patch
+*** Update File: backend/utils/serviceCatalog.js
+@@
+-const fs = require("fs");
+-const path = require("path");
+-const fetch = global.fetch || require("node-fetch");
+-const { mapService } = require("./serviceUtils");
+-
+-const hasKvEnv = Boolean(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
+-let kvClient = null;
+-if (hasKvEnv) {
+-  try {
+-    ({ kv: kvClient } = require("@vercel/kv"));
+-  } catch (err) {
+-    kvClient = null;
+-    console.warn("[serviceCatalog] gagal load @vercel/kv:", err.message);
+-  }
+-}
++const fs = require("fs");
++const path = require("path");
++const fetch = global.fetch || require("node-fetch");
++const { mapService } = require("./serviceUtils");
++
++const resolveEnv = (...keys) => {
++  for (const key of keys) {
++    const value = process.env[key];
++    if (typeof value === "string" && value.trim()) {
++      return value.trim();
++    }
++  }
++  return null;
++};
++
++const resolvedKvUrl =
++  resolveEnv("KV_REST_API_URL", "UPSTASH_KV_KV_REST_API_URL", "UPSTASH_KV_REST_API_URL", "UPSTASH_KV_URL") ||
++  null;
++const resolvedKvToken =
++  resolveEnv("KV_REST_API_TOKEN", "UPSTASH_KV_KV_REST_API_TOKEN", "UPSTASH_KV_REST_API_TOKEN", "UPSTASH_KV_TOKEN") ||
++  null;
++
++if (resolvedKvUrl) process.env.KV_REST_API_URL = resolvedKvUrl;
++if (resolvedKvToken) process.env.KV_REST_API_TOKEN = resolvedKvToken;
++
++const hasKvEnv = Boolean(resolvedKvUrl && resolvedKvToken);
++let kvClient = null;
++if (hasKvEnv) {
++  try {
++    ({ kv: kvClient } = require("@vercel/kv"));
++  } catch (err) {
++    kvClient = null;
++    console.warn("[serviceCatalog] gagal load @vercel/kv:", err.message);
++  }
++}
+*** End Patch

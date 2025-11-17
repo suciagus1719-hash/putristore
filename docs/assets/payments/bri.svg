@@ -1,0 +1,6 @@
+<svg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+  <rect width="400" height="400" rx="24" fill="#111827"/>
+  <text x="200" y="160" text-anchor="middle" font-size="46" fill="#fcd34d" font-family="'Poppins', sans-serif">BRI</text>
+  <text x="200" y="210" text-anchor="middle" font-size="18" fill="#fde68a" font-family="'Poppins', sans-serif">Letakkan banner transfer</text>
+  <text x="200" y="240" text-anchor="middle" font-size="18" fill="#fde68a" font-family="'Poppins', sans-serif">di assets/payments/bri.svg</text>
+</svg>

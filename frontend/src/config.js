@@ -1,4 +1,4 @@
-const FALLBACK_API = "https://putristore-backend.vercel.app";
+const FALLBACK_API = "https://backend-pnn9o4gyw-suciagus1719-hashs-projects.vercel.app";
 const envCandidates = [
   import.meta.env?.VITE_API_URL,
   import.meta.env?.VITE_API_BASE,

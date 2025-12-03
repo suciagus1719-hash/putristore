@@ -40,7 +40,7 @@ import {
 } from "lucide-react";
 
 const WHATSAPP_GROUP_LINK = "https://chat.whatsapp.com/link-grup-kamu";
-const API_FALLBACK = "https://putristore-api.vercel.app";
+const API_FALLBACK = "https://backend-pnn9o4gyw-suciagus1719-hashs-projects.vercel.app";
 const AVATAR_URL =
   (import.meta?.env?.VITE_OWNER_AVATAR && import.meta.env.VITE_OWNER_AVATAR.trim()) ||
   "https://images.unsplash.com/photo-1504593811423-6dd665756598?auto=format&fit=crop&w=200&q=60";

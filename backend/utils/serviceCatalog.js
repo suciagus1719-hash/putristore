@@ -121,7 +121,11 @@ async function persistCatalog(list, meta = {}) {
     },
   };
   if (kvClient) {
-    await kvClient.set(CACHE_KEY, JSON.stringify(payload));
+    try {
+      await kvClient.set(CACHE_KEY, JSON.stringify(payload));
+    } catch (err) {
+      console.warn("[serviceCatalog] gagal menyimpan cache ke KV:", err.message);
+    }
   }
   try {
     fs.mkdirSync(DATA_DIR, { recursive: true });

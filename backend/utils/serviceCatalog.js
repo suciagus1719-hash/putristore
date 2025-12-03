@@ -33,6 +33,21 @@ const PANEL_URLS = Array.from(
 const PANEL_KEY = process.env.SMMPANEL_API_KEY || process.env.PANEL_KEY || "";
 const PANEL_SECRET = process.env.SMMPANEL_SECRET || process.env.PANEL_SECRET || "";
 
+let embeddedSeedSnapshot = null;
+try {
+  const rawSeed = require("../data/services.seed.json");
+  if (Array.isArray(rawSeed?.list)) {
+    embeddedSeedSnapshot = rawSeed;
+  } else if (Array.isArray(rawSeed)) {
+    embeddedSeedSnapshot = {
+      list: rawSeed.map((svc) => mapService(svc)),
+      meta: { source: "seed-file", cached_at: new Date().toISOString() },
+    };
+  }
+} catch {
+  embeddedSeedSnapshot = null;
+}
+
 async function fetchPanelServices() {
   if (!PANEL_KEY) {
     const error = new Error("SMMPANEL_API_KEY belum diset");
@@ -178,6 +193,7 @@ function readManualCatalog() {
 }
 
 function readSeedCatalog() {
+  if (embeddedSeedSnapshot?.list?.length) return embeddedSeedSnapshot;
   try {
     if (!fs.existsSync(SEED_FILE)) return null;
     const raw = JSON.parse(fs.readFileSync(SEED_FILE, "utf8"));

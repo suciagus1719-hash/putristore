@@ -14,6 +14,7 @@ const CACHE_KEY = "__service_catalog_v1";
 const DATA_DIR = path.join(__dirname, "..", "data");
 const CACHE_FILE = path.join(DATA_DIR, "services-cache.json");
 const MANUAL_FILE = path.join(DATA_DIR, "services.manual.json");
+const SEED_FILE = path.join(DATA_DIR, "services.seed.json");
 const CACHE_TTL_MS = Number(process.env.SERVICES_CACHE_TTL_MS || 5 * 60 * 1000);
 
 const PANEL_URLS = Array.from(
@@ -176,6 +177,23 @@ function readManualCatalog() {
   return null;
 }
 
+function readSeedCatalog() {
+  try {
+    if (!fs.existsSync(SEED_FILE)) return null;
+    const raw = JSON.parse(fs.readFileSync(SEED_FILE, "utf8"));
+    if (Array.isArray(raw?.list)) return raw;
+    if (Array.isArray(raw)) {
+      return {
+        list: raw.map((svc) => mapService(svc)),
+        meta: { source: "seed-file", cached_at: new Date().toISOString() },
+      };
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
 async function resolveServiceCatalog({ forceRefresh = false } = {}) {
   let snapshot = await readCachedCatalog();
   const now = Date.now();
@@ -208,6 +226,9 @@ async function resolveServiceCatalog({ forceRefresh = false } = {}) {
   const manual = readManualCatalog();
   if (manual?.list?.length) return manual;
 
+  const seed = readSeedCatalog();
+  if (seed?.list?.length) return seed;
+
   if (lastError) throw lastError;
   const fallbackError = new Error("Service catalog kosong. Sinkronkan layanan melalui endpoint admin.");
   fallbackError.code = "CATALOG_EMPTY";
@@ -235,6 +256,7 @@ module.exports = {
   saveManualCatalog,
   readCachedCatalog,
   readManualCatalog,
+  readSeedCatalog,
 };
 let lastPanelFailure = 0;
 const PANEL_FAILURE_COOLDOWN_MS = Number(process.env.SERVICES_FAILURE_COOLDOWN_MS || 60000);

@@ -289,37 +289,52 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
   const [receiptImage, setReceiptImage] = useState(null);
   const [showCopied, setShowCopied] = useState(false);
   const [buttonGlowPhase, setButtonGlowPhase] = useState(0);
+  const [statusLoading, setStatusLoading] = useState(false);
 
   const categoryCache = useRef({});
   const prevPlatformRef = useRef(selectedPlatform);
   const prevCategoryRef = useRef(selectedCategory);
+  const orderIdRef = useRef(null);
+  const isGatewayOrder = order?.payment?.gateway === "duitku";
+  const gatewayCheckoutUrl = order?.payment?.gateway_checkout_url || "";
+  const orderStatusLabel = order?.status || "pending_payment";
+  const gatewayPaidStatuses = ["approved", "paid_gateway", "paid_pending_panel"];
+  const gatewayPaymentSuccess = isGatewayOrder && gatewayPaidStatuses.includes(orderStatusLabel);
+  const gatewayPaymentFailed =
+    isGatewayOrder && ["payment_failed", "cancelled", "rejected"].includes(orderStatusLabel);
+  const gatewayModeLabel = order?.payment?.gateway_mode === "production" ? "Production" : "Sandbox";
+  const paymentDeadline = order?.payment?.expires_at ? new Date(order.payment.expires_at) : null;
 
-  const loadServices = useCallback(
-    async (options = {}) => {
-      setServicesLoading(true);
-      try {
-        const url = new URL(`${apiBase}/api/services`);
-        if (options.refresh) url.searchParams.set("refresh", "1");
-        const res = await fetch(url.toString());
-        const data = await res.json();
-        if (Array.isArray(data) && data.length) {
-          setAllServices(data);
-          setServiceError("");
-        } else {
-          setAllServices(Array.isArray(data) ? data : []);
-          const reason =
-            res.headers?.get?.("x-service-error") ||
-            "Belum ada layanan aktif. Sinkronkan melalui menu Admin.";
-          setServiceError(reason);
-        }
-      } catch (err) {
-        setServiceError(err.message || "Gagal memuat layanan.");
-      } finally {
-        setServicesLoading(false);
+  const loadServices = useCallback(async () => {
+    setServicesLoading(true);
+    const fetchSnapshot = async (refreshFlag) => {
+      const url = new URL(`${apiBase}/api/services`);
+      if (refreshFlag) url.searchParams.set("refresh", "1");
+      const res = await fetch(url.toString());
+      const data = await res.json();
+      return { list: Array.isArray(data) ? data : [], response: res };
+    };
+    try {
+      let snapshot = await fetchSnapshot(false);
+      if (!snapshot.list.length) {
+        snapshot = await fetchSnapshot(true);
       }
-    },
-    [apiBase]
-  );
+      setAllServices(snapshot.list);
+      if (snapshot.list.length) {
+        setServiceError("");
+      } else {
+        const reason =
+          snapshot.response?.headers?.get?.("x-service-error") ||
+          "Belum ada layanan aktif. Sinkronkan melalui menu Admin.";
+        setServiceError(reason);
+      }
+    } catch (err) {
+      setAllServices([]);
+      setServiceError(err.message || "Gagal memuat layanan.");
+    } finally {
+      setServicesLoading(false);
+    }
+  }, [apiBase]);
 
   const resetOrderInputs = useCallback(() => {
     setSelectedService(null);
@@ -370,6 +385,28 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
   useEffect(() => {
     loadServices();
   }, [loadServices]);
+
+  useEffect(() => {
+    orderIdRef.current = order?.order_id || null;
+  }, [order?.order_id]);
+
+  useEffect(() => {
+    if (!isGatewayOrder || !order?.order_id) return undefined;
+    if (gatewayPaymentSuccess || gatewayPaymentFailed) return undefined;
+    const polling = setInterval(() => {
+      refreshOrderStatus(order.order_id, { silent: true }).catch(() => {});
+    }, 10000);
+    return () => clearInterval(polling);
+  }, [isGatewayOrder, order?.order_id, gatewayPaymentSuccess, gatewayPaymentFailed, refreshOrderStatus]);
+
+  useEffect(() => {
+    if (!isGatewayOrder || !order?.status) return;
+    if (gatewayPaymentSuccess || gatewayPaymentFailed) {
+      setStep(3);
+    } else if (step < 2) {
+      setStep(2);
+    }
+  }, [isGatewayOrder, order?.status, gatewayPaymentSuccess, gatewayPaymentFailed, step]);
 
   useEffect(() => {
     if (!selectedPlatform) return;
@@ -556,6 +593,10 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
 
   const handlePaymentMethod = async () => {
     setError("");
+    if (order?.payment?.gateway === "duitku") {
+      setError("Pembayaran sudah dialihkan ke Duitku.");
+      return;
+    }
     if (!order?.order_id) {
       setError("Order belum dibuat.");
       return;
@@ -643,6 +684,58 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
     setStep(1);
     setError("");
   };
+
+  const refreshOrderStatus = useCallback(
+    async (forcedOrderId, options = {}) => {
+      const targetId = forcedOrderId || orderIdRef.current;
+      if (!targetId) return null;
+      const silent = Boolean(options?.silent);
+      if (!silent) {
+        setStatusLoading(true);
+      }
+      try {
+        const res = await fetch(
+          `${apiBase}/api/order/status?order_id=${encodeURIComponent(targetId)}`
+        );
+        const data = await res.json();
+        if (!res.ok || data.message) {
+          throw new Error(data.message || "Gagal mengambil status");
+        }
+        setOrder((prev) => {
+          const nextPayment = {
+            ...(prev?.payment || {}),
+            ...(data.payment || {}),
+          };
+          return {
+            ...(prev || {}),
+            order_id: data.order_id,
+            status: data.status,
+            target: data.target ?? prev?.target ?? "",
+            service_name: data.service_name ?? prev?.service_name ?? "",
+            quantity: data.quantity ?? prev?.quantity ?? 0,
+            payment: nextPayment,
+            provider_order_id: data.provider_order_id ?? prev?.provider_order_id ?? null,
+            review_deadline: data.review_deadline ?? prev?.review_deadline ?? null,
+            created_at: data.created_at ?? prev?.created_at ?? null,
+          };
+        });
+        if (data.created_at) {
+          setOrderTimestamp(new Date(data.created_at));
+        }
+        return data;
+      } catch (err) {
+        if (!silent) {
+          setError(err.message);
+        }
+        throw err;
+      } finally {
+        if (!silent) {
+          setStatusLoading(false);
+        }
+      }
+    },
+    [apiBase]
+  );
 
   const handleStatusCheck = async () => {
     const orderId = window.prompt("Masukkan Order ID Anda");
@@ -995,7 +1088,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
-                    onClick={() => loadServices({ refresh: true })}
+                    onClick={() => loadServices()}
                     className="px-3 py-1 rounded-full border border-amber-400/50 bg-amber-500/20 text-amber-50 text-xs"
                   >
                     Muat ulang layanan
@@ -1049,7 +1142,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
                 </span>
                 <button
                   type="button"
-                  onClick={() => loadServices({ refresh: true })}
+                  onClick={() => loadServices()}
                   className="text-[10px] px-2 py-1 rounded-full border border-white/20 text-white/70 hover:text-white hover:border-white/40 transition"
                 >
                   Refresh
@@ -1184,7 +1277,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
 
         {step === 2 && order && (
           <section className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur p-6 space-y-6">
-            {renderStepTitle("2", "Konfirmasi Pembayaran")}
+            {renderStepTitle("2", isGatewayOrder ? "Bayar via Duitku" : "Konfirmasi Pembayaran")}
             <div className="grid sm:grid-cols-2 gap-4 text-sm text-white/80">
               {[
                 { label: "Order ID", value: order.order_id },
@@ -1211,6 +1304,50 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
               ))}
             </div>
 
+            {isGatewayOrder ? (
+              <>
+                <div className="rounded-2xl border border-purple-400/30 bg-black/30 p-4 flex flex-col gap-2">
+                  <p className="text-sm text-white/60">Total Pembayaran (Duitku · {gatewayModeLabel})</p>
+                  <p className="text-3xl font-bold">{formatIDR(livePaymentAmount)}</p>
+                  <p className="text-xs text-white/60">
+                    Status Gateway: {(order.payment?.gateway_status || order.status || "pending").replace(/_/g, " ")}
+                  </p>
+                  <p className="text-xs text-white/60">
+                    Batas Pembayaran: {paymentDeadline ? paymentDeadline.toLocaleString("id-ID") : "-"}
+                  </p>
+                  <p className="text-xs text-white/60">Referensi: {order.payment?.gateway_reference || "-"}</p>
+                </div>
+                <div className="space-y-4 text-sm text-white/80">
+                  <p>
+                    Klik tombol di bawah untuk membuka halaman pembayaran resmi Duitku. Karena mode sandbox, transaksi
+                    bersifat simulasi dan tidak menarik saldo sungguhan namun tetap mencatat status pembayaran.
+                  </p>
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => gatewayCheckoutUrl && window.open(gatewayCheckoutUrl, "_blank", "noopener,noreferrer")}
+                      disabled={!gatewayCheckoutUrl}
+                      className="rounded-2xl bg-purple-500 py-3 font-semibold disabled:opacity-50"
+                    >
+                      Buka Halaman Pembayaran
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => refreshOrderStatus(order.order_id).catch(() => {})}
+                      disabled={statusLoading}
+                      className="rounded-2xl border border-white/30 bg-white/10 py-3 font-semibold disabled:opacity-50"
+                    >
+                      {statusLoading ? "Memeriksa..." : "Saya Sudah Bayar"}
+                    </button>
+                  </div>
+                  <p className="text-xs text-white/60">
+                    Setelah Duitku mengonfirmasi pembayaran, order otomatis diteruskan ke panel SMM. Kamu juga bisa
+                    menekan tombol &ldquo;Saya Sudah Bayar&rdquo; untuk memaksa pengecekan status.
+                  </p>
+                </div>
+              </>
+            ) : (
+              <>
             <div
               className="rounded-2xl border border-purple-400/30 bg-black/30 p-4 flex flex-col gap-2"
               style={{ marginTop: "10%" }}
@@ -1331,12 +1468,14 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
                 dibatalkan.
               </p>
             </div>
+              </>
+            )}
           </section>
         )}
 
         {step === 3 && order && (
           <section className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur p-6 space-y-4">
-            {renderStepTitle("3", "Struk Menunggu Konfirmasi")}
+            {renderStepTitle("3", gatewayPaymentSuccess ? "Pembayaran Berhasil" : "Struk Menunggu Konfirmasi")}
             <div className="rounded-2xl border border-white/10 bg-black/30 p-4 text-sm text-white/70 space-y-1">
               <p className="text-white/50">Status saat ini</p>
               <p className="text-lg font-semibold capitalize">{String(order.status || "Menunggu_Konfirmasi_Admin").replace(/_/g, " ")}</p>
@@ -1356,6 +1495,15 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
                   ? "Menunggu bukti via email"
                   : "Belum ada"}
               </p>
+              {isGatewayOrder && (
+                <>
+                  <p>Pembayaran: Duitku · {gatewayModeLabel}</p>
+                  <p>
+                    Status Gateway: {(order.payment?.gateway_status || order.status || "pending").replace(/_/g, " ")}
+                  </p>
+                  <p>Provider Order ID: {order.provider_order_id || "-"}</p>
+                </>
+              )}
               <p className="text-xs text-white/50">
                 Admin akan memeriksa secepatnya jika dalam 10 menit tidak ada kabar dari admin, silahkan tag admin di grup untuk mempercepat proses.
                 
@@ -1379,6 +1527,16 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
                 <Download className="w-4 h-4" />
                 Download Struk
               </a>
+            )}
+            {isGatewayOrder && (
+              <button
+                type="button"
+                onClick={() => refreshOrderStatus(order.order_id).catch(() => {})}
+                disabled={statusLoading}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-2xl border border-white/30 bg-white/10 text-sm disabled:opacity-50"
+              >
+                {statusLoading ? "Memeriksa status..." : "Perbarui Status Pesanan"}
+              </button>
             )}
             <div className="grid sm:grid-cols-2 gap-3">
               <button

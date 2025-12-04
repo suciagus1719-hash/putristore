@@ -13,6 +13,12 @@ const {
   forceRefreshCatalog,
   readCachedCatalog,
 } = require("../../utils/serviceCatalog");
+const {
+  isConfigured: isDuitkuConfigured,
+  getConfig: getDuitkuConfig,
+  createHostedInvoice,
+  verifyCallbackSignature,
+} = require("../../utils/duitku");
 
 const router = express.Router();
 
@@ -41,6 +47,8 @@ const BLOB_TOKEN =
   process.env.VERCEL_BLOB_RW_TOKEN ||
   process.env.VERCEL_BLOB_READ_WRITE_TOKEN ||
   null;
+const DUITKU_CONFIG = getDuitkuConfig();
+const DUITKU_ENABLED = isDuitkuConfigured();
 
 const WHATSAPP_WEBHOOK_URL =
   process.env.NOTIFY_WHATSAPP_URL ||
@@ -198,10 +206,24 @@ async function dispatchNotifications(order) {
 
 async function enforceReviewDeadline(order) {
   if (!order) return null;
+  const nowTs = Date.now();
+  if (
+    order.hold_until &&
+    ["pending_payment", "waiting_gateway"].includes(order.status) &&
+    nowTs > Date.parse(order.hold_until)
+  ) {
+    order.status = "cancelled";
+    order.auto_cancelled = true;
+    order.cancel_reason = "payment_timeout";
+    order.cancelled_at = new Date().toISOString();
+    order.review_deadline = null;
+    await cacheOrder(order);
+    return order;
+  }
   if (
     ["waiting_review", "waiting_payment_proof"].includes(order.status) &&
     order.review_deadline &&
-    Date.now() > Date.parse(order.review_deadline)
+    nowTs > Date.parse(order.review_deadline)
   ) {
     order.status = "cancelled";
     order.auto_cancelled = true;
@@ -524,6 +546,50 @@ router.post("/order/checkout", async (req, res) => {
       pending_payment_at: now.toISOString(),
     },
   };
+  if (DUITKU_ENABLED) {
+    try {
+      const invoice = await createHostedInvoice(order, {
+        amount: total || normalizedQuantity * unit,
+        description: order.service_name || `Layanan ${order.service_id}`,
+      });
+      if (!invoice.ok) {
+        return res.status(502).json({
+          ok: false,
+          message: invoice.message || "Gateway pembayaran tidak tersedia",
+          detail: invoice.detail || null,
+        });
+      }
+      const expireMinutes = invoice.payload?.expiryPeriod || PAYMENT_WINDOW_MINUTES;
+      const gatewayExpires = new Date(now.getTime() + expireMinutes * 60 * 1000).toISOString();
+      order.hold_until = gatewayExpires;
+      order.payment = {
+        ...(order.payment || {}),
+        method: "duitku",
+        proof_channel: "gateway",
+        proof_status: "gateway_pending",
+        expires_at: gatewayExpires,
+        gateway: "duitku",
+        gateway_mode: DUITKU_CONFIG.mode,
+        gateway_status: "pending",
+        gateway_reference:
+          invoice.response?.reference ||
+          invoice.response?.invoiceId ||
+          order.order_id,
+        gateway_checkout_url: invoice.response?.paymentUrl,
+        gateway_response: invoice.response,
+      };
+      order.notes = order.notes || `Gateway: Duitku (${DUITKU_CONFIG.mode})`;
+      order.status = "waiting_gateway";
+      order.timeline = {
+        ...(order.timeline || {}),
+        gateway_invoice_created_at: now.toISOString(),
+      };
+    } catch (err) {
+      return res
+        .status(502)
+        .json({ ok: false, message: err.message || "Gagal membuat pembayaran" });
+    }
+  }
   order.hydration_token = encodeHydrationToken(order);
   await cacheOrder(order);
   return res.json({ ok: true, order });
@@ -545,6 +611,12 @@ router.post("/order/payment-method", async (req, res) => {
 
   const order = await resolveOrder(order_id, order_snapshot, order_payload, hydration_token);
   if (!order) return res.status(404).json({ ok: false, message: "Order tidak ditemukan" });
+  if (order.payment?.gateway === "duitku") {
+    return res.status(409).json({
+      ok: false,
+      message: "Order ini menggunakan pembayaran otomatis melalui Duitku.",
+    });
+  }
   if (["cancelled", "rejected"].includes(order.status)) {
     return res.status(409).json({ ok: false, message: "Order sudah tidak aktif" });
   }
@@ -590,6 +662,12 @@ router.post("/order/upload-proof", upload.single("proof"), async (req, res) => {
   const { order_id, order_snapshot, order_payload, hydration_token } = req.body || {};
   const order = await resolveOrder(order_id, order_snapshot, order_payload, hydration_token);
   if (!order) return res.status(404).json({ ok: false, message: "Order tidak ditemukan" });
+  if (order.payment?.gateway === "duitku") {
+    return res.status(409).json({
+      ok: false,
+      message: "Order ini menggunakan pembayaran otomatis melalui Duitku.",
+    });
+  }
   if (!req.file) return res.status(400).json({ ok: false, message: "Bukti wajib diupload" });
 
   const prepared = await normalizeProofBuffer(req.file);
@@ -630,6 +708,89 @@ router.post("/order/upload-proof", upload.single("proof"), async (req, res) => {
   await cacheOrder(order);
   dispatchNotifications(order).catch((err) => console.warn("notify gagal:", err?.message || err));
   return res.json({ ok: true, order });
+});
+
+router.post("/order/duitku-callback", async (req, res) => {
+  if (!DUITKU_ENABLED) {
+    return res.status(200).send("IGNORED");
+  }
+  try {
+    const payload = typeof req.body === "object" && req.body !== null ? req.body : {};
+    const merchantOrderId =
+      String(payload.merchantOrderId || payload.merchantOrderID || payload.invoiceNumber || "").trim();
+    if (!merchantOrderId) {
+      return res.status(400).send("INVALID_ORDER");
+    }
+    if (!verifyCallbackSignature(payload)) {
+      console.warn("[duitku] signature invalid", payload);
+      return res.status(400).send("INVALID_SIGNATURE");
+    }
+    const order = await loadOrder(merchantOrderId);
+    if (!order) {
+      return res.status(404).send("ORDER_NOT_FOUND");
+    }
+    const now = new Date().toISOString();
+    order.payment = order.payment || {};
+    order.payment.gateway = "duitku";
+    order.payment.gateway_reference = payload.reference || order.payment.gateway_reference || null;
+    order.payment.gateway_payment_code = payload.paymentCode || order.payment.gateway_payment_code || null;
+    order.payment.gateway_callback = payload;
+    order.payment.gateway_last_callback_at = now;
+    const resultCode = String(payload.resultCode || payload.statusCode || "").trim();
+    const success = resultCode === "00";
+    order.timeline = {
+      ...(order.timeline || {}),
+      gateway_callback_at: now,
+      ...(success ? { gateway_paid_at: now } : {}),
+    };
+    if (success) {
+      order.payment.gateway_status = "paid";
+      order.payment.gateway_paid_at = now;
+      order.payment.proof_status = "gateway_confirmed";
+      order.status = "paid_gateway";
+      order.review_deadline = null;
+      if (!order.provider_order_id) {
+        const panelResult = await pushOrderToPanel(order);
+        if (panelResult.ok) {
+          const approvedAt = new Date().toISOString();
+          order.provider_order_id = panelResult.provider_order_id;
+          order.status = "approved";
+          order.timeline = {
+            ...(order.timeline || {}),
+            gateway_forwarded_at: approvedAt,
+            approved_at: approvedAt,
+          };
+        } else {
+          order.status = "paid_pending_panel";
+          order.panel_forward_error = panelResult.message || "panel_error";
+          order.panel_forward_detail = panelResult.detail || null;
+        }
+      } else if (!order.timeline?.approved_at) {
+        order.status = "approved";
+        order.timeline = {
+          ...(order.timeline || {}),
+          approved_at: now,
+        };
+      } else {
+        order.status = order.status === "paid_gateway" ? "approved" : order.status;
+      }
+    } else {
+      order.status = "payment_failed";
+      order.payment.gateway_status = "failed";
+      order.payment.gateway_failed_code = resultCode || "unknown";
+      order.payment.gateway_failed_message =
+        payload.resultDesc || payload.resultMessage || payload.statusMessage || null;
+    }
+    order.hydration_token = encodeHydrationToken(order);
+    await cacheOrder(order);
+    if (order.status === "approved") {
+      dispatchNotifications(order).catch((err) => console.warn("notify gagal:", err?.message || err));
+    }
+    return res.status(200).send("SUCCESS");
+  } catch (err) {
+    console.error("[duitku] callback error:", err);
+    return res.status(500).send("ERROR");
+  }
 });
 
 // admin: auth sederhana pakai header

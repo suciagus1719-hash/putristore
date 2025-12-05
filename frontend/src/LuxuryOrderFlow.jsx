@@ -325,7 +325,7 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
       } else {
         const reason =
           snapshot.response?.headers?.get?.("x-service-error") ||
-          "Belum ada layanan aktif. Sinkronkan melalui menu Admin.";
+          "Belum ada layanan aktif. Tekan tombol Refresh atau hubungi CS untuk sinkronisasi.";
         setServiceError(reason);
       }
     } catch (err) {
@@ -941,7 +941,6 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
         window.open("https://instagram.com/stories/highlights/your_highlight_id", "_blank", "noopener");
       },
     },
-    { label: "Admin", action: () => { setMenuOpen(false); navigate("/admin"); } },
     { label: "Status Order", action: () => { setMenuOpen(false); handleStatusCheck(); } },
   ];
 
@@ -1464,8 +1463,8 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
                 {loading ? "Mengirim..." : "Saya sudah bayar"}
               </button>
               <p className="text-xs text-white/50 text-center">
-                Data order akan tertahan di admin selama maksimal 1x24 jam untuk diverifikasi sebelum otomatis
-                dibatalkan.
+                Data order akan tersimpan maksimal 1x24 jam sambil menunggu pembayaran otomatis sebelum sistem
+                membatalkannya.
               </p>
             </div>
               </>
@@ -1478,34 +1477,48 @@ export default function LuxuryOrderFlow({ apiBase = API_FALLBACK }) {
             {renderStepTitle("3", gatewayPaymentSuccess ? "Pembayaran Berhasil" : "Struk Menunggu Konfirmasi")}
             <div className="rounded-2xl border border-white/10 bg-black/30 p-4 text-sm text-white/70 space-y-1">
               <p className="text-white/50">Status saat ini</p>
-              <p className="text-lg font-semibold capitalize">{String(order.status || "Menunggu_Konfirmasi_Admin").replace(/_/g, " ")}</p>
-              <p>
-                Waktu Verifikasi :{" "}
-                {order.review_deadline
-                  ? `${formatWitaDate(new Date(order.review_deadline))} � ${formatWitaTime(
-                      new Date(order.review_deadline)
-                    )}`
-                  : "Menunggu admin"}
+              <p className="text-lg font-semibold capitalize">
+                {String(order.status || "menunggu_pembayaran").replace(/_/g, " ")}
               </p>
               <p>
-                Bukti bayar:{" "}
-                {order.payment?.proof_status === "uploaded"
-                  ? "Sudah diterima"
+                Status Pembayaran:{" "}
+                {isGatewayOrder
+                  ? (order.payment?.gateway_status || order.status || "pending").replace(/_/g, " ")
+                  : order.payment?.proof_status === "uploaded"
+                  ? "Bukti transfer sudah diterima"
                   : order.payment?.proof_status === "awaiting_email"
                   ? "Menunggu bukti via email"
-                  : "Belum ada"}
+                  : "Menunggu bukti transfer"}
               </p>
-              {isGatewayOrder && (
+              {isGatewayOrder ? (
                 <>
-                  <p>Pembayaran: Duitku · {gatewayModeLabel}</p>
                   <p>
-                    Status Gateway: {(order.payment?.gateway_status || order.status || "pending").replace(/_/g, " ")}
+                    Batas Pembayaran:{" "}
+                    {paymentDeadline
+                      ? `${formatWitaDate(paymentDeadline)} � ${formatWitaTime(paymentDeadline)}`
+                      : "-"}
                   </p>
+                  <p>
+                    Update Terakhir:{" "}
+                    {gatewayLastUpdate
+                      ? `${formatWitaDate(gatewayLastUpdate)} � ${formatWitaTime(gatewayLastUpdate)}`
+                      : "-"}
+                  </p>
+                  <p>Pembayaran: Duitku � {gatewayModeLabel}</p>
                   <p>Provider Order ID: {order.provider_order_id || "-"}</p>
                 </>
+              ) : (
+                <p>
+                  Bukti bayar:{" "}
+                  {order.payment?.proof_status === "uploaded"
+                    ? "Sudah diterima"
+                    : order.payment?.proof_status === "awaiting_email"
+                    ? "Menunggu bukti via email"
+                    : "Belum ada"}
+                </p>
               )}
               <p className="text-xs text-white/50">
-                Admin akan memeriksa secepatnya jika dalam 10 menit tidak ada kabar dari admin, silahkan tag admin di grup untuk mempercepat proses.
+                Pembayaran diverifikasi otomatis oleh gateway Duitku. Jika status belum berubah, gunakan tombol Perbarui Status Pesanan atau hubungi CS.
                 
               </p>
             </div>
